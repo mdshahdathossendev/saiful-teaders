@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL;
+const DEFAULT_WEB_APP_URL =
+  'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
 
-  if (!sheetUrl || sheetUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')) {
+function getSheetUrl() {
+  const envUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL;
+  return envUrl && !envUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')
+    ? envUrl
+    : DEFAULT_WEB_APP_URL;
+}
+
+export async function GET() {
+  const sheetUrl = getSheetUrl();
+
+  if (!sheetUrl) {
     return NextResponse.json({ totalCustomers: 0, totalAmount: 0, currentMonthTotal: 0 });
   }
 
@@ -16,6 +26,8 @@ export async function GET() {
       headers: {
         'Content-Type': 'application/json',
       },
+      redirect: 'follow',
+      cache: 'no-store',
     });
 
     const text = await response.text();

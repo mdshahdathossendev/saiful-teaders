@@ -1,4 +1,4 @@
-const SPREADSHEET_ID = '1a7jgJUhHwwjCRfuJeQSj2TIiwl1ZHyhVl4WMeS_uOqU';
+const SPREADSHEET_ID = '1c7ZyUibkflrm-lOp_eVpmYEge1hriMZAGB93-G-CWCk';
 
 const HEADERS = [
   'তারিখ',

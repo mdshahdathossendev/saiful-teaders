@@ -1,14 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin123';
 const GOOGLE_SHEET_WEB_APP_URL =
   process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL ||
-  'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
+  'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
 
 const BUSINESS_OPTIONS = [
   'সাইফুল ট্রেডার্স ১',
@@ -99,26 +98,21 @@ export default function ProjectDashboardPage() {
         const data = await response.json();
         if (data.ok && data.customers) {
           setCustomerOptions(data.customers);
-          setForm((prev) => {
-            if (!prev.customer && data.customers.length > 0) {
-              const firstCustomer = data.customers[0].name;
-              fetchCustomerSummary(firstCustomer);
-              return { ...prev, customer: firstCustomer };
-            }
-            return prev;
+          queueMicrotask(() => {
+            setForm((prev) => {
+              if (!prev.customer && data.customers.length > 0) {
+                const firstCustomer = data.customers[0].name;
+                queueMicrotask(() => fetchCustomerSummary(firstCustomer));
+                return { ...prev, customer: firstCustomer };
+              }
+              return prev;
+            });
           });
         }
       }
     } catch (e) {}
     setIsFetchingData(false);
   };
-
-  useEffect(() => {
-    if (isLoggedIn) {
-      fetchNextChallanNo();
-      fetchCustomers();
-    }
-  }, [isLoggedIn]);
 
   const handleLogin = (event) => {
     event.preventDefault();
@@ -127,6 +121,10 @@ export default function ProjectDashboardPage() {
       setIsLoggedIn(true);
       setError('');
       setStatus('');
+      queueMicrotask(() => {
+        fetchNextChallanNo();
+        fetchCustomers();
+      });
       return;
     }
 
@@ -212,10 +210,14 @@ export default function ProjectDashboardPage() {
     const challanNo = form.challanNo.trim();
 
     if (GOOGLE_SHEET_WEB_APP_URL === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
-      setStatus(
-        'Google Sheet Web App URL কনফিগার করুন। .env.local-এ NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL সেট করুন।'
-      );
-      setError('');
+      setError('Google Sheet Web App URL কনফিগার করুন। .env.local-এ NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL সেট করুন।');
+      setStatus('');
+      return;
+    }
+
+    if (!customer) {
+      setError('গ্রাহকের নাম নির্বাচন করুন।');
+      setStatus('');
       return;
     }
 
@@ -228,6 +230,8 @@ export default function ProjectDashboardPage() {
     );
     const mobile = currentCustomerObj?.mobile || '';
     const address = currentCustomerObj?.address || '';
+
+    let errorDetail = '';
 
     try {
       const payload = {
@@ -257,20 +261,38 @@ export default function ProjectDashboardPage() {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error('Google Sheet submission failed');
+      let responseBody = null;
+      try {
+        responseBody = await response.json();
+      } catch (_) {
+        responseBody = null;
       }
 
-      const submitResult = await response.json();
-      
+      if (!response.ok) {
+        const msgFromBody =
+          responseBody && typeof responseBody.error === 'string'
+            ? responseBody.error
+            : '';
+        errorDetail =
+          msgFromBody ||
+          `HTTP ${response.status}: Google Sheet অনুরোধ প্রত্যাখ্যান করেছে।`;
+        throw new Error(errorDetail);
+      }
+
+      const submitResult = responseBody || {};
+
       let actualChallanNo = challanNo;
-      if (submitResult.response) {
+
+      const parsedGAS = submitResult.parsed;
+      if (parsedGAS && typeof parsedGAS.challanNo !== 'undefined') {
+        actualChallanNo = String(parsedGAS.challanNo);
+      } else if (submitResult.response) {
         try {
-          const parsedGAS = JSON.parse(submitResult.response);
-          if (parsedGAS.challanNo) {
-            actualChallanNo = String(parsedGAS.challanNo);
+          const parsed = JSON.parse(submitResult.response);
+          if (parsed && parsed.challanNo) {
+            actualChallanNo = String(parsed.challanNo);
           }
-        } catch (e) {}
+        } catch (_) {}
       }
 
       const currentChallanNum = parseInt(actualChallanNo, 10) || DEFAULT_INITIAL_CHALLAN;
@@ -278,6 +300,7 @@ export default function ProjectDashboardPage() {
 
       setLastSlip({ ...payload, challanNo: actualChallanNo });
       setStatus(`বিক্রয় হিসাব (চালান নং: ${actualChallanNo}) Google Sheet-এ সফলভাবে যোগ হয়েছে।`);
+      setError('');
       setForm({
         ...getInitialForm(),
         customer,
@@ -285,7 +308,12 @@ export default function ProjectDashboardPage() {
       });
       await fetchCustomerSummary(customer);
     } catch (submitError) {
-      setStatus('Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি। URL ঠিক আছে কিনা দেখুন।');
+      const msg = submitError?.message || String(submitError || '');
+      const finalMsg = msg
+        ? `Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি। ${msg}`
+        : 'Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি। URL ঠিক আছে কিনা, Web App Deploy করা হয়েছে কিনা দেখুন।';
+      setError(finalMsg);
+      setStatus('');
     } finally {
       setIsSubmitting(false);
     }
@@ -1141,7 +1169,8 @@ export default function ProjectDashboardPage() {
             </label>
           </div>
 
-          {status ? <p className={error ? 'error-text' : 'success-text'}>{status}</p> : null}
+          {error ? <p className="error-text">{error}</p> : null}
+          {status ? <p className="success-text">{status}</p> : null}
 
           {lastSlip ? (
             <button type="button" className="secondary-btn full-width-btn" onClick={handleDownloadSlip}>

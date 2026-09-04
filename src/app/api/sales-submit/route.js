@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 
-export async function POST(request) {
-  const sheetUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL;
+const DEFAULT_WEB_APP_URL =
+  'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
 
-  if (!sheetUrl || sheetUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')) {
-    return NextResponse.json({ error: 'Google Sheet URL is not configured.' }, { status: 500 });
-  }
+export async function POST(request) {
+  const envUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL;
+  const sheetUrl =
+    envUrl && !envUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')
+      ? envUrl
+      : DEFAULT_WEB_APP_URL;
 
   try {
     const payload = await request.json();
@@ -15,21 +18,44 @@ export async function POST(request) {
         'Content-Type': 'text/plain;charset=utf-8',
       },
       body: JSON.stringify(payload),
+      redirect: 'follow',
     });
 
     const responseText = await response.text();
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: responseText || 'Google Sheet rejected the request.' },
+        {
+          ok: false,
+          error:
+            responseText ||
+            `Google Sheet rejected the request (HTTP ${response.status}).`,
+          statusCode: response.status,
+        },
         { status: response.status }
       );
     }
 
-    return NextResponse.json({ ok: true, response: responseText });
+    let parsed;
+    try {
+      parsed = responseText ? JSON.parse(responseText) : null;
+    } catch (_) {
+      parsed = null;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      response: responseText,
+      parsed,
+    });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি।' },
+      {
+        ok: false,
+        error:
+          error?.message ||
+          'Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি। নেটওয়ার্ক বা Web App URL চেক করুন।',
+      },
       { status: 502 }
     );
   }
