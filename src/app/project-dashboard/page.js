@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { useRef, useState, useEffect } from 'react';
 
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin123';
@@ -17,65 +18,45 @@ const BUSINESS_OPTIONS = [
   'সাইফুল ট্রেডার্স ৫',
 ];
 
-const DEFAULT_CUSTOMER_OPTIONS = [];
 
-const CUSTOMER_STORAGE_KEY = 'saiful-traders-customers';
 
-const normalizeCustomerOptions = (options = []) => {
-  if (!Array.isArray(options)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      options
-        .map((option) => String(option).trim())
-        .filter(Boolean)
-    )
-  );
-};
-
-const getStoredCustomerOptions = () => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_CUSTOMER_OPTIONS;
-  }
-
-  try {
-    const stored = window.localStorage.getItem(CUSTOMER_STORAGE_KEY);
-    if (!stored) {
-      return DEFAULT_CUSTOMER_OPTIONS;
-    }
-
-    const parsed = JSON.parse(stored);
-    return normalizeCustomerOptions(parsed);
-  } catch (error) {
-    return DEFAULT_CUSTOMER_OPTIONS;
-  }
-};
-
-const persistCustomerOptions = (options) => {
-  const normalized = normalizeCustomerOptions(options);
-
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(normalized));
-  }
-
-  return normalized;
-};
+const DEFAULT_INITIAL_CHALLAN = 5000;
 
 const getInitialForm = () => ({
   date: new Date().toISOString().split('T')[0],
   business: '',
-  customer: getStoredCustomerOptions()[0] || '',
+  customer: '',
   vehicle: '',
   description: '',
-  feet: '',
+  feet: '0',
   rate: '',
   amount: '',
-  remaining: '',
-  challanNo: '',
-  note: '',
+  depositedTotal: '0',
+  depositedBase: '0',
+  deposited: '0',
+  remaining: '0',
+  due: '0',
+  remainingBase: '0',
+  dueBase: '0',
+  totalAmountBase: '0',
+  tons: '0',
+  feetPerTon: '0',
+  challanNo: 'লোড হচ্ছে...',
 });
+
+const LocationPinIcon = ({ className = '', size = 14 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={`location-svg-icon ${className}`}
+    aria-hidden="true"
+    style={{ display: 'inline-block', verticalAlign: '-0.15em', flexShrink: 0 }}
+  >
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+  </svg>
+);
 
 export default function ProjectDashboardPage() {
   const [username, setUsername] = useState('');
@@ -84,69 +65,59 @@ export default function ProjectDashboardPage() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingData, setIsFetchingData] = useState(false);
   const [form, setForm] = useState(() => getInitialForm());
-  const [customerOptions, setCustomerOptions] = useState(() => getStoredCustomerOptions());
-  const [summary, setSummary] = useState({
-    totalCustomers: 0,
-    totalAmount: 0,
-    currentMonthTotal: 0,
-  });
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
   const [lastSlip, setLastSlip] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', mobile: '', address: '' });
+  const customerSummaryRequest = useRef(0);
 
-  const fetchSummary = async () => {
+  const fetchNextChallanNo = async () => {
+    setIsFetchingData(true);
     try {
-      const response = await fetch('/api/sales-summary');
-      if (!response.ok) {
-        return;
-      }
-
+      const response = await fetch('/api/next-challan');
+      if (!response.ok) return;
       const data = await response.json();
-      setSummary({
-        totalCustomers: Number(data.totalCustomers) || 0,
-        totalAmount: Number(data.totalAmount) || 0,
-        currentMonthTotal: Number(data.currentMonthTotal ?? data.totalAmount) || 0,
-      });
+      if (data && data.nextChallanNo) {
+        setForm((prev) => ({ ...prev, challanNo: String(data.nextChallanNo) }));
+      }
     } catch (error) {
-      setSummary({ totalCustomers: 0, totalAmount: 0, currentMonthTotal: 0 });
+      setForm((prev) => ({ ...prev, challanNo: '' }));
+    } finally {
+      setIsFetchingData(false);
     }
   };
 
-  useEffect(() => {
-    if (!isLoggedIn) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadSummary = async () => {
-      try {
-        const response = await fetch('/api/sales-summary');
-        if (!response.ok || !isMounted) {
-          return;
-        }
-
+  const fetchCustomers = async () => {
+    setIsFetchingData(true);
+    try {
+      const response = await fetch('/api/customers');
+      if (response.ok) {
         const data = await response.json();
-        if (!isMounted) {
-          return;
-        }
-
-        setSummary({
-          totalCustomers: Number(data.totalCustomers) || 0,
-          totalAmount: Number(data.totalAmount) || 0,
-          currentMonthTotal: Number(data.currentMonthTotal ?? data.totalAmount) || 0,
-        });
-      } catch (error) {
-        if (isMounted) {
-          setSummary({ totalCustomers: 0, totalAmount: 0, currentMonthTotal: 0 });
+        if (data.ok && data.customers) {
+          setCustomerOptions(data.customers);
+          setForm((prev) => {
+            if (!prev.customer && data.customers.length > 0) {
+              const firstCustomer = data.customers[0].name;
+              fetchCustomerSummary(firstCustomer);
+              return { ...prev, customer: firstCustomer };
+            }
+            return prev;
+          });
         }
       }
-    };
+    } catch (e) {}
+    setIsFetchingData(false);
+  };
 
-    loadSummary();
-
-    return () => {
-      isMounted = false;
-    };
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchNextChallanNo();
+      fetchCustomers();
+    }
   }, [isLoggedIn]);
 
   const handleLogin = (event) => {
@@ -162,17 +133,62 @@ export default function ProjectDashboardPage() {
     setError('ভুল ইউজারনেম বা পাসওয়ার্ড। ডিফল্ট: admin / admin123');
   };
 
-  const digitsToBangla = (value) => {
-    const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-    return String(value).replace(/\d/g, (digit) => banglaDigits[Number(digit)] ?? digit);
+  const toEnglishNumber = (value) => {
+    const banglaDigits = {
+      '০': '0',
+      '১': '1',
+      '২': '2',
+      '৩': '3',
+      '৪': '4',
+      '৫': '5',
+      '৬': '6',
+      '৭': '7',
+      '৮': '8',
+      '৯': '9',
+    };
+
+    return String(value ?? '').replace(/[০-৯]/g, (digit) => banglaDigits[digit] || digit);
   };
 
   const handleNumberInput = (fieldName, value) => {
-    const sanitizedValue = value.replace(/[^\d.]/g, '');
-    setForm((previousForm) => ({
-      ...previousForm,
-      [fieldName]: sanitizedValue,
-    }));
+    const sanitizedValue = String(value)
+      .replace(/[^\d.০-৯]/g, '')
+      .replace(/[০-৯]/g, (digit) => digit);
+
+    setForm((previousForm) => {
+      const nextForm = {
+        ...previousForm,
+        [fieldName]: sanitizedValue,
+      };
+
+      if (fieldName === 'tons' || fieldName === 'feetPerTon') {
+        const tons = Number(toEnglishNumber(nextForm.tons)) || 0;
+        const feetPerTon = Number(toEnglishNumber(nextForm.feetPerTon)) || 0;
+        nextForm.feet = String(tons * feetPerTon);
+      }
+
+      if (fieldName === 'tons' || fieldName === 'feetPerTon' || fieldName === 'rate') {
+        const feet = Number(toEnglishNumber(nextForm.feet)) || 0;
+        const rate = Number(toEnglishNumber(nextForm.rate)) || 0;
+        nextForm.amount = String(feet * rate);
+      }
+
+      if (fieldName === 'deposited' || fieldName === 'tons' || fieldName === 'feetPerTon' || fieldName === 'rate') {
+        const deposited = Number(toEnglishNumber(nextForm.deposited)) || 0;
+        const amount = Number(toEnglishNumber(nextForm.amount)) || 0;
+        const remainingBase = Number(toEnglishNumber(nextForm.remainingBase)) || 0;
+        const dueBase = Number(toEnglishNumber(nextForm.dueBase)) || 0;
+        const netBalance = remainingBase - dueBase + deposited - amount;
+        nextForm.remaining = String(Math.max(netBalance, 0));
+        nextForm.due = String(Math.max(-netBalance, 0));
+        if (fieldName === 'deposited') {
+          const depositedBase = Number(toEnglishNumber(nextForm.depositedBase)) || 0;
+          nextForm.depositedTotal = String(depositedBase + deposited);
+        }
+      }
+
+      return nextForm;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -182,17 +198,18 @@ export default function ProjectDashboardPage() {
     const customer = form.customer.trim();
     const vehicle = form.vehicle.trim();
     const description = form.description.trim();
-    const feet = Number(form.feet) || 0;
-    const rate = Number(form.rate) || 0;
-    const amount = Number(form.amount) || 0;
-    const remaining = Number(form.remaining) || 0;
+    const tons = Number(toEnglishNumber(form.tons)) || 0;
+    const feetPerTon = Number(toEnglishNumber(form.feetPerTon)) || 0;
+    const feet = tons * feetPerTon;
+    const rate = Number(toEnglishNumber(form.rate)) || 0;
+    const amount = feet * rate;
+    const deposited = Number(toEnglishNumber(form.deposited)) || 0;
+    const remainingBase = Number(toEnglishNumber(form.remainingBase)) || 0;
+    const dueBase = Number(toEnglishNumber(form.dueBase)) || 0;
+    const netBalance = remainingBase - dueBase + deposited - amount;
+    const remaining = Math.max(netBalance, 0);
+    const due = Math.max(-netBalance, 0);
     const challanNo = form.challanNo.trim();
-
-    if (!customer || !vehicle || !description || !amount) {
-      setStatus('গ্রাহক, গাড়ি, বিবরণ ও টাকার তথ্য লিখুন।');
-      setError('');
-      return;
-    }
 
     if (GOOGLE_SHEET_WEB_APP_URL === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
       setStatus(
@@ -206,33 +223,67 @@ export default function ProjectDashboardPage() {
     setStatus('');
     setError('');
 
+    const currentCustomerObj = customerOptions.find(
+      (c) => c.name.toLowerCase() === customer.toLowerCase()
+    );
+    const mobile = currentCustomerObj?.mobile || '';
+    const address = currentCustomerObj?.address || '';
+
     try {
       const payload = {
         date: form.date,
         business,
         sheetName: customer,
         customer,
+        mobile,
+        address,
         vehicle,
         description,
         feet,
         rate,
         amount,
+        deposited,
         remaining,
+        due,
+        tons,
+        feetPerTon,
         challanNo,
-        note: form.note.trim() || 'কোন নোট নেই',
         createdAt: new Date().toISOString(),
       };
 
-      await fetch(GOOGLE_SHEET_WEB_APP_URL, {
+      const response = await fetch('/api/sales-submit', {
         method: 'POST',
-        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      setLastSlip(payload);
-      await fetchSummary();
-      setStatus('বিক্রয় হিসাব Google Sheet-এ সফলভাবে যোগ হয়েছে।');
-      setForm(getInitialForm());
+      if (!response.ok) {
+        throw new Error('Google Sheet submission failed');
+      }
+
+      const submitResult = await response.json();
+      
+      let actualChallanNo = challanNo;
+      if (submitResult.response) {
+        try {
+          const parsedGAS = JSON.parse(submitResult.response);
+          if (parsedGAS.challanNo) {
+            actualChallanNo = String(parsedGAS.challanNo);
+          }
+        } catch (e) {}
+      }
+
+      const currentChallanNum = parseInt(actualChallanNo, 10) || DEFAULT_INITIAL_CHALLAN;
+      const nextChallanNum = currentChallanNum + 1;
+
+      setLastSlip({ ...payload, challanNo: actualChallanNo });
+      setStatus(`বিক্রয় হিসাব (চালান নং: ${actualChallanNo}) Google Sheet-এ সফলভাবে যোগ হয়েছে।`);
+      setForm({
+        ...getInitialForm(),
+        customer,
+        challanNo: String(nextChallanNum),
+      });
+      await fetchCustomerSummary(customer);
     } catch (submitError) {
       setStatus('Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি। URL ঠিক আছে কিনা দেখুন।');
     } finally {
@@ -248,9 +299,85 @@ export default function ProjectDashboardPage() {
     setStatus('');
   };
 
+  const fetchCustomerSummary = async (customerName) => {
+    setIsFetchingData(true);
+    const requestId = customerSummaryRequest.current + 1;
+    customerSummaryRequest.current = requestId;
+
+    if (!customerName) {
+      setIsFetchingData(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/customer-summary?customer=${encodeURIComponent(customerName)}`);
+      if (!response.ok) {
+        setIsFetchingData(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (customerSummaryRequest.current !== requestId) {
+        setIsFetchingData(false);
+        return;
+      }
+
+      setForm((previousForm) => {
+        if (previousForm.customer !== customerName) {
+          return previousForm;
+        }
+
+        return {
+          ...previousForm,
+          depositedTotal: String(Number(data.deposited) || 0),
+          depositedBase: String(Number(data.deposited) || 0),
+          remaining: String(Number(data.remaining) || 0),
+          due: String(Number(data.due) || 0),
+          remainingBase: String(Number(data.remaining) || 0),
+          dueBase: String(Number(data.due) || 0),
+          totalAmountBase: String(Number(data.totalAmount) || 0),
+        };
+      });
+    } catch (error) {
+      if (customerSummaryRequest.current !== requestId) {
+        setIsFetchingData(false);
+        return;
+      }
+
+      setForm((previousForm) => {
+        if (previousForm.customer !== customerName) {
+          return previousForm;
+        }
+
+        return {
+          ...previousForm,
+          depositedTotal: '0',
+          depositedBase: '0',
+          remaining: '0',
+          due: '0',
+        };
+      });
+    } finally {
+      setIsFetchingData(false);
+    }
+  };
+
   const handleSelectCustomer = (customerName) => {
     const nextCustomer = customerName?.trim?.() || '';
-    setForm((previousForm) => ({ ...previousForm, customer: nextCustomer }));
+    customerSummaryRequest.current += 1;
+    setForm((previousForm) => ({
+      ...previousForm,
+      customer: nextCustomer,
+      depositedTotal: '0',
+      depositedBase: '0',
+      deposited: '0',
+      remaining: '0',
+      due: '0',
+      remainingBase: '0',
+      dueBase: '0',
+      totalAmountBase: '0',
+    }));
+    fetchCustomerSummary(nextCustomer);
   };
 
   const handleOpenSelectedSheet = () => {
@@ -288,59 +415,65 @@ export default function ProjectDashboardPage() {
   };
 
   const handleAddCustomer = () => {
-    const customerName = window.prompt('নতুন গ্রাহকের নাম লিখুন:', '');
-    if (!customerName) {
-      return;
-    }
-
-    const trimmedName = customerName.trim();
-    if (!trimmedName) {
-      return;
-    }
-
-    setCustomerOptions((previousOptions) => {
-      const alreadyExists = previousOptions.some(
-        (option) => option.toLowerCase() === trimmedName.toLowerCase()
-      );
-
-      const nextOptions = alreadyExists ? [...previousOptions] : [...previousOptions, trimmedName];
-      const savedOptions = persistCustomerOptions(nextOptions);
-
-      setForm((previousForm) => ({
-        ...previousForm,
-        customer: trimmedName,
-      }));
-
-      return savedOptions;
-    });
+    setNewCustomerForm({ name: '', mobile: '', address: '' });
+    setShowAddModal(true);
   };
 
-  const handleDeleteCustomer = () => {
+  const handleConfirmAddCustomer = async () => {
+    const trimmedName = newCustomerForm.name.trim();
+    if (!trimmedName) return;
+
+    const newEntry = {
+      name: trimmedName,
+      mobile: newCustomerForm.mobile.trim(),
+      address: newCustomerForm.address.trim(),
+    };
+
+    setCustomerOptions((prev) => {
+      if (prev.some(c => c.name.toLowerCase() === trimmedName.toLowerCase())) return prev;
+      return [...prev, newEntry];
+    });
+
+    setForm((prev) => ({
+      ...prev,
+      customer: trimmedName,
+    }));
+
+    setShowAddModal(false);
+
+    try {
+      await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'addCustomer', ...newEntry })
+      });
+    } catch (e) {}
+
+    fetchCustomerSummary(trimmedName);
+  };
+
+  const handleDeleteCustomer = async () => {
     const currentCustomer = form.customer.trim();
-    if (!currentCustomer) {
-      return;
-    }
+    if (!currentCustomer) return;
 
     const confirmed = window.confirm(`"${currentCustomer}" নামটি মুছে ফেলবেন?`);
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    setCustomerOptions((previousOptions) => {
-      const nextOptions = previousOptions.filter(
-        (option) => option.toLowerCase() !== currentCustomer.toLowerCase()
-      );
-
-      const savedOptions = persistCustomerOptions(nextOptions);
-
-      if (savedOptions.length > 0) {
-        setForm((previousForm) => ({ ...previousForm, customer: savedOptions[0] }));
+    setCustomerOptions((prev) => {
+      const nextOptions = prev.filter(c => c.name.toLowerCase() !== currentCustomer.toLowerCase());
+      if (nextOptions.length > 0) {
+        setForm(f => ({ ...f, customer: nextOptions[0].name }));
       } else {
-        setForm((previousForm) => ({ ...previousForm, customer: '' }));
+        setForm(f => ({ ...f, customer: '' }));
       }
-
-      return savedOptions;
+      return nextOptions;
     });
+
+    try {
+      await fetch(`/api/customers?name=${encodeURIComponent(currentCustomer)}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {}
   };
 
   const handleDownloadSlip = () => {
@@ -379,20 +512,37 @@ export default function ProjectDashboardPage() {
               padding: 28px 26px 22px;
             }
             .title {
-              font-size: 30px;
-              font-weight: 800;
+              font-size: 14px;
+              font-weight: 700;
               text-align: center;
-              margin: 0 0 18px;
-              color: #111827;
-              letter-spacing: 0.4px;
-            }
-            .subtitle {
-              text-align: center;
-              font-size: 12px;
+              margin: 0 0 6px;
               color: #6b7280;
-              margin-bottom: 22px;
-              letter-spacing: 0.8px;
+              letter-spacing: 1px;
               text-transform: uppercase;
+            }
+            .customer-banner {
+              text-align: center;
+              background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
+              color: #ffffff;
+              border-radius: 14px;
+              padding: 16px 20px;
+              margin-bottom: 20px;
+            }
+            .customer-big-name {
+              font-size: 26px;
+              font-weight: 800;
+              line-height: 1.2;
+              margin-bottom: 6px;
+            }
+            .customer-sub-meta {
+              font-size: 13px;
+              font-weight: 600;
+              color: #e2e8f0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 16px;
+              flex-wrap: wrap;
             }
             .grid {
               display: grid;
@@ -446,8 +596,17 @@ export default function ProjectDashboardPage() {
         </head>
         <body>
           <div class="slip">
-            <div class="title">Saiful Traders</div>
-            <div class="subtitle">Sales Slip</div>
+            <div class="title">Saiful Traders — Sales Slip</div>
+
+            <div class="customer-banner">
+              <div class="customer-big-name">${lastSlip.customer}</div>
+              ${(lastSlip.mobile || lastSlip.address) ? `
+                <div class="customer-sub-meta">
+                  ${lastSlip.mobile ? `<span>📞 মোবাইল: ${lastSlip.mobile}</span>` : ''}
+                  ${lastSlip.address ? `<span>📍 ঠিকানা: ${lastSlip.address}</span>` : ''}
+                </div>
+              ` : ''}
+            </div>
 
             <div class="grid">
               <div class="field">
@@ -475,13 +634,28 @@ export default function ProjectDashboardPage() {
               </div>
 
               <div class="field">
-                <span class="label">টাকা</span>
-                <span class="value">৳ ${Number(lastSlip.amount || 0).toLocaleString('en-BD')}</span>
+                <span class="label">জমা</span>
+                <span class="value">৳ ${Number(lastSlip.deposited || 0).toLocaleString('en-BD')}</span>
               </div>
 
               <div class="field">
                 <span class="label">অবশিষ্ট</span>
                 <span class="value">৳ ${Number(lastSlip.remaining || 0).toLocaleString('en-BD')}</span>
+              </div>
+
+              <div class="field">
+                <span class="label">পাওনা</span>
+                <span class="value">৳ ${Number(lastSlip.due || 0).toLocaleString('en-BD')}</span>
+              </div>
+
+              <div class="field">
+                <span class="label">টন</span>
+                <span class="value">${Number(lastSlip.tons || 0).toLocaleString('en-BD')}</span>
+              </div>
+
+              <div class="field">
+                <span class="label">টাকা</span>
+                <span class="value">৳ ${Number(lastSlip.amount || 0).toLocaleString('en-BD')}</span>
               </div>
 
               <div class="field full">
@@ -494,10 +668,6 @@ export default function ProjectDashboardPage() {
                 <span class="value">${lastSlip.challanNo || '—'}</span>
               </div>
 
-              <div class="field">
-                <span class="label">নোট</span>
-                <span class="value">${lastSlip.note || 'কোন নোট নেই'}</span>
-              </div>
             </div>
 
             <div class="total-box">
@@ -549,12 +719,34 @@ export default function ProjectDashboardPage() {
             </button>
           </form>
         </div>
+        {isFetchingData && (
+          <div className="spinner-overlay">
+            <LoadingSpinner />
+          </div>
+        )}
       </div>
     );
   }
 
+  const filteredCustomerOptions = customerOptions.filter((option) => {
+    if (!customerSearch.trim()) return true;
+    const query = customerSearch.toLowerCase().trim();
+    return (
+      option.name.toLowerCase().includes(query) ||
+      option.mobile.toLowerCase().includes(query) ||
+      option.address.toLowerCase().includes(query)
+    );
+  });
+
+  const selectedCustomerObj = customerOptions.find((c) => c.name === form.customer);
+
   return (
     <div className="dashboard-shell">
+      {isFetchingData && (
+        <div className="spinner-overlay">
+          <LoadingSpinner />
+        </div>
+      )}
       <header className="dashboard-header">
         <div>
           <p className="login-tag">Saiful Traders</p>
@@ -579,31 +771,100 @@ export default function ProjectDashboardPage() {
 
       <section className="stats-grid">
         <div className="stat-box">
-          <span>মোট গ্রাহক</span>
-          <strong>{summary.totalCustomers}</strong>
+          <span>মোট জমা</span>
+          <strong>৳ {Number(form.depositedBase || 0).toLocaleString('bn-BD')}</strong>
         </div>
 
         <div className="stat-box income-box">
-          <span>চলতি মাসের বিক্রয়</span>
-          <strong>৳ {summary.currentMonthTotal.toLocaleString('bn-BD')}</strong>
+          <span>মোট পাওনা</span>
+          <strong>৳ {Number(form.dueBase || 0).toLocaleString('bn-BD')}</strong>
         </div>
 
         <div className="stat-box profit-box">
-          <span>মোট বিক্রয়</span>
-          <strong>৳ {summary.totalAmount.toLocaleString('bn-BD')}</strong>
+          <span>মোট অবশিষ্ট</span>
+          <strong>৳ {Number(form.remainingBase || 0).toLocaleString('bn-BD')}</strong>
+        </div>
+
+        <div className="stat-box sale-box">
+          <span>মোট বিক্রি</span>
+          <strong>৳ {Number(form.totalAmountBase || 0).toLocaleString('bn-BD')}</strong>
         </div>
       </section>
 
       <section className="customer-list-panel">
         <div className="panel-header-row">
-          <h3>গ্রাহক তালিকা</h3>
-          <span>{customerOptions.length} জন</span>
+          <div className="panel-title-group">
+            <h3>গ্রাহক তালিকা</h3>
+            <span className="customer-count-chip">{customerOptions.length} জন</span>
+          </div>
+
+          <div className="panel-actions">
+            <div className="customer-search-wrapper">
+              <span className="search-icon" aria-hidden="true">🔍</span>
+              <input
+                type="text"
+                className="customer-search-input"
+                placeholder="খুঁজুন (নাম, মোবাইল বা ঠিকানা)..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+              />
+              {customerSearch && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setCustomerSearch('')}
+                  title="ক্লিয়ার করুন"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="add-customer-quick-btn"
+              onClick={handleAddCustomer}
+              title="নতুন কাস্টমার যোগ করুন"
+            >
+              <span className="plus-icon">＋</span>
+              <span>নতুন গ্রাহক</span>
+            </button>
+
+            <button
+              type="button"
+              className="delete-customer-quick-btn"
+              onClick={handleDeleteCustomer}
+              disabled={!form.customer}
+              title="নির্বাচিত গ্রাহক মুছে ফেলুন"
+            >
+              <span className="minus-icon">−</span>
+              <span>গ্রাহক বাতিল</span>
+            </button>
+          </div>
         </div>
 
         <div className="selected-sheet-banner">
           <div className="selected-sheet-info">
-            <span className="sheet-label">সিলেক্টেড শিট</span>
-            <strong>{form.customer || 'কোনো গ্রাহক নির্বাচন হয়নি'}</strong>
+            <span className="sheet-label">নির্বাচিত গ্রাহক শিট</span>
+            <div className="selected-sheet-details">
+              <strong className="selected-sheet-name">{form.customer || 'কোনো গ্রাহক নির্বাচন হয়নি'}</strong>
+              {selectedCustomerObj && (selectedCustomerObj.mobile || selectedCustomerObj.address) && (
+                <div className="selected-sheet-meta">
+                  {selectedCustomerObj.mobile && (
+                    <span className="banner-meta-chip mobile-chip">
+                      <span className="chip-icon">📞</span>
+                      <span className="chip-text">{selectedCustomerObj.mobile}</span>
+                    </span>
+                  )}
+                  {selectedCustomerObj.address && (
+                    <span className="banner-meta-chip address-chip">
+                      <LocationPinIcon size={13} className="chip-icon-svg" />
+                      <span className="chip-text">{selectedCustomerObj.address}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <button
@@ -612,24 +873,71 @@ export default function ProjectDashboardPage() {
             onClick={handleOpenSelectedSheet}
             disabled={!form.customer}
           >
-            ওপেন শিট
+            <span>ওপেন শিট</span>
+            <span className="btn-arrow" aria-hidden="true">→</span>
           </button>
         </div>
 
-        <div className="customer-list">
-          {customerOptions.length === 0 ? (
-            <p className="empty-state">কোনো গ্রাহক নেই। নতুন গ্রাহক যোগ করুন।</p>
+        <div className="customer-grid">
+          {filteredCustomerOptions.length === 0 ? (
+            <div className="customer-empty-card">
+              <span className="empty-icon">👥</span>
+              <p>{customerSearch ? 'আপনার অনুসন্ধান অনুযায়ী কোনো গ্রাহক পাওয়া যায়নি' : 'কোনো গ্রাহক নেই। নতুন গ্রাহক যোগ করুন।'}</p>
+            </div>
           ) : (
-            customerOptions.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`customer-list-item ${form.customer === option ? 'selected' : ''}`}
-                onClick={() => handleSelectCustomer(option)}
-              >
-                {option}
-              </button>
-            ))
+            filteredCustomerOptions.map((option) => {
+              const isSelected = form.customer === option.name;
+              const initialLetter = option.name.trim().charAt(0) || 'ক';
+              return (
+                <div
+                  key={option.name}
+                  className={`customer-card ${isSelected ? 'selected' : ''}`}
+                  onClick={() => handleSelectCustomer(option.name)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleSelectCustomer(option.name);
+                    }
+                  }}
+                >
+                  <div className="customer-card-top">
+                    <div className="customer-avatar-badge">{initialLetter}</div>
+                    <div className="customer-card-main-info">
+                      <span className="customer-card-name">{option.name}</span>
+                      <span className="customer-card-address" title={option.address || ''}>
+                        <LocationPinIcon size={13} className="address-pin-icon" />
+                        <span>{option.address || 'ঠিকানা দেওয়া হয়নি'}</span>
+                      </span>
+                    </div>
+                    {isSelected && <span className="selected-check-dot">✓</span>}
+                  </div>
+
+                  <div className="customer-card-details">
+                    {option.mobile ? (
+                      <a
+                        href={`tel:${option.mobile}`}
+                        className="customer-phone-call-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectCustomer(option.name);
+                        }}
+                        title={`${option.name}-কে কল করুন: ${option.mobile}`}
+                      >
+                        <span className="detail-icon">📞</span>
+                        <span className="phone-num-text">{option.mobile}</span>
+                        <span className="call-now-tag">কল দিন 📲</span>
+                      </a>
+                    ) : (
+                      <div className="customer-phone-call-btn no-mobile">
+                        <span className="detail-icon">📞</span>
+                        <span className="phone-num-text">নম্বর দেওয়া হয়নি</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </section>
@@ -655,11 +963,27 @@ export default function ProjectDashboardPage() {
               >
                 <option value="">-- নির্বাচন করুন --</option>
                 {customerOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
+                  <option key={option.name} value={option.name}>
+                    {option.name}{option.mobile ? ` (${option.mobile})` : ''}
                   </option>
                 ))}
               </select>
+              {selectedCustomerObj && (selectedCustomerObj.mobile || selectedCustomerObj.address) && (
+                <div className="form-customer-info-bar">
+                  {selectedCustomerObj.mobile && (
+                    <span className="form-info-badge phone-badge">
+                      <span className="badge-icon">📞</span>
+                      <span className="badge-text">{selectedCustomerObj.mobile}</span>
+                    </span>
+                  )}
+                  {selectedCustomerObj.address && (
+                    <span className="form-info-badge address-badge">
+                      <LocationPinIcon size={13} className="badge-icon-svg" />
+                      <span className="badge-text">{selectedCustomerObj.address}</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </label>
           </div>
 
@@ -685,28 +1009,109 @@ export default function ProjectDashboardPage() {
             </label>
           </div>
 
+          <div
+            className="inline-row"
+            style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}
+          >
+            <div className="formula-group">
+              <label>
+                টন
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
+                  value={form.tons}
+                  onChange={(event) => handleNumberInput('tons', event.target.value)}
+                  placeholder="টন"
+                  aria-label="টন"
+                />
+              </label>
+              <span className="formula-symbol" aria-hidden="true">×</span>
+              <label>
+                গুণ
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
+                  value={form.feetPerTon}
+                  onChange={(event) => handleNumberInput('feetPerTon', event.target.value)}
+                  placeholder="গুণ"
+                  aria-label="গুণ"
+                />
+              </label>
+            </div>
+
+            <div className="formula-group">
+              <label>
+                ফুট
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
+                  value={form.feet}
+                  readOnly
+                  aria-label="গণনা করা ফুট"
+                />
+              </label>
+              <span className="formula-symbol" aria-hidden="true">×</span>
+              <label>
+                দর
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
+                  value={form.rate}
+                  onChange={(event) => handleNumberInput('rate', event.target.value)}
+                  placeholder="দর"
+                  aria-label="দর"
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="inline-row">
             <label>
-              ফুট
+              মোট জমা
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
-                value={digitsToBangla(form.feet)}
-                onChange={(event) => handleNumberInput('feet', event.target.value)}
-                placeholder="যেমন: ১০"
+                value={form.depositedTotal}
+                readOnly
+                aria-label="মোট জমা"
               />
             </label>
 
             <label>
-              দর
+              নতুন জমা
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
-                value={digitsToBangla(form.rate)}
-                onChange={(event) => handleNumberInput('rate', event.target.value)}
-                placeholder="যেমন: ৫০০"
+                pattern="[0-9০-৯]*"
+                value={form.deposited}
+                onChange={(event) => handleNumberInput('deposited', event.target.value)}
+                placeholder="যেমন: ০ বা 0"
+              />
+            </label>
+
+            <label>
+              অবশিষ্ট
+              <input
+                type="text"
+                inputMode="numeric"
+                value={form.remaining}
+                readOnly
+                aria-label="অবশিষ্ট টাকা"
+              />
+            </label>
+
+            <label>
+              পাওনা
+              <input
+                type="text"
+                inputMode="numeric"
+                value={form.due}
+                readOnly
+                aria-label="পাওনা টাকা"
               />
             </label>
           </div>
@@ -717,44 +1122,21 @@ export default function ProjectDashboardPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
-                value={digitsToBangla(form.amount)}
-                onChange={(event) => handleNumberInput('amount', event.target.value)}
-                placeholder="যেমন: ৫০০০"
+                pattern="[0-9০-৯]*"
+                value={form.amount}
+                readOnly
+                aria-label="গণনা করা টাকা"
               />
             </label>
 
             <label>
-              অবশিষ্ট
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={digitsToBangla(form.remaining)}
-                onChange={(event) => handleNumberInput('remaining', event.target.value)}
-                placeholder="যেমন: ০"
-              />
-            </label>
-          </div>
-
-          <div className="inline-row">
-            <label>
-              চালান নং
+              চালান নং (অটোমেটিক)
               <input
                 type="text"
                 value={form.challanNo}
-                onChange={(event) => setForm({ ...form, challanNo: event.target.value })}
-                placeholder="চালান নম্বর লিখুন"
-              />
-            </label>
-
-            <label>
-              নোট
-              <textarea
-                rows="2"
-                value={form.note}
-                onChange={(event) => setForm({ ...form, note: event.target.value })}
-                placeholder="বিস্তারিত লিখুন"
+                readOnly
+                className="auto-challan-input"
+                aria-label="অটোমেটিক চালান নম্বর"
               />
             </label>
           </div>
@@ -772,6 +1154,81 @@ export default function ProjectDashboardPage() {
           </button>
         </form>
       </section>
+
+      {showAddModal ? (
+        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>নতুন গ্রাহক যোগ করুন</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowAddModal(false)}
+                aria-label="বন্ধ করুন"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <label className="modal-label">
+                গ্রাহকের নাম <span className="required-mark">*</span>
+                <input
+                  type="text"
+                  value={newCustomerForm.name}
+                  onChange={(e) =>
+                    setNewCustomerForm({ ...newCustomerForm, name: e.target.value })
+                  }
+                  placeholder="গ্রাহকের নাম লিখুন"
+                  autoFocus
+                />
+              </label>
+
+              <label className="modal-label">
+                মোবাইল নাম্বার
+                <input
+                  type="tel"
+                  value={newCustomerForm.mobile}
+                  onChange={(e) =>
+                    setNewCustomerForm({ ...newCustomerForm, mobile: e.target.value })
+                  }
+                  placeholder="যেমন: ০১৭XXXXXXXX"
+                />
+              </label>
+
+              <label className="modal-label">
+                ঠিকানা
+                <input
+                  type="text"
+                  value={newCustomerForm.address}
+                  onChange={(e) =>
+                    setNewCustomerForm({ ...newCustomerForm, address: e.target.value })
+                  }
+                  placeholder="গ্রাহকের ঠিকানা লিখুন"
+                />
+              </label>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="secondary-btn modal-cancel-btn"
+                onClick={() => setShowAddModal(false)}
+              >
+                বাতিল
+              </button>
+              <button
+                type="button"
+                className="primary-btn modal-confirm-btn"
+                onClick={handleConfirmAddCustomer}
+                disabled={!newCustomerForm.name.trim()}
+              >
+                যোগ করুন
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
