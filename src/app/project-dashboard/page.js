@@ -3,8 +3,8 @@
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useRef, useState } from 'react';
 
-const DEFAULT_USERNAME = 'admin';
-const DEFAULT_PASSWORD = 'admin123';
+const DEFAULT_USERNAME = 'সাইফুল';
+const DEFAULT_PASSWORD = 'সাইফুল১২৩';
 const GOOGLE_SHEET_WEB_APP_URL =
   process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL ||
   'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
@@ -128,7 +128,7 @@ export default function ProjectDashboardPage() {
       return;
     }
 
-    setError('ভুল ইউজারনেম বা পাসওয়ার্ড। ডিফল্ট: admin / admin123');
+    setError('ভুল ইউজারনেম বা পাসওয়ার্ড দিয়েছেন পুনরায় আবার চেষ্টা করুন');
   };
 
   const toEnglishNumber = (value) => {
@@ -509,199 +509,525 @@ export default function ProjectDashboardPage() {
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    const printWindow = window.open('', '_blank', 'width=1100,height=800');
 
     if (!printWindow) {
       return;
     }
 
+    const date = lastSlip.date;
+    const customer = lastSlip.customer;
+    const mobile = lastSlip.mobile || '';
+    const address = lastSlip.address || '';
+    const vehicle = lastSlip.vehicle || '—';
+    const description = lastSlip.description || '—';
+    const tons = Number(lastSlip.tons || 0).toLocaleString('en-BD');
+    const feetPerTon = Number(lastSlip.feetPerTon || 0).toLocaleString('en-BD');
+    const feet = Number(lastSlip.feet || 0).toLocaleString('en-BD');
+    const rate = '৳ ' + Number(lastSlip.rate || 0).toLocaleString('en-BD');
+    const amount = '৳ ' + Number(lastSlip.amount || 0).toLocaleString('en-BD');
+    const deposited = '৳ ' + Number(lastSlip.deposited || 0).toLocaleString('en-BD');
+    const remaining = '৳ ' + Number(lastSlip.remaining || 0).toLocaleString('en-BD');
+    const due = '৳ ' + Number(lastSlip.due || 0).toLocaleString('en-BD');
+    const challanNo = lastSlip.challanNo || '—';
+    const totalAmount = '৳ ' + Number(lastSlip.amount || 0).toLocaleString('en-BD');
+
+    const buildSlip = (copyLabel) => `
+      <div class="slip">
+        <div class="slip-inner">
+          <div class="business-header">
+            <div class="header-top-row">
+              <div class="mst-logo">MST</div>
+              <div class="titles">
+                <h1 class="bn-company">মেসার্স সাইফুল ট্রেডার্স এন্ড স্টোন ক্রাশার</h1>
+                <h2 class="en-company">M/S SAIFUL TRADERS &amp; STONE CRUSHER</h2>
+              </div>
+              <div class="copy-tag">${copyLabel}</div>
+            </div>
+            <p class="tagline">সাদা এলসি, কালো এলসি, কয়লা সহ সর্বপ্রকার ভাঙ্গা পাথর ও বালুর নির্ভরযোগ্য প্রতিষ্ঠান</p>
+            <div class="contact-pill">
+              <span>প্রোঃ জাকির হোসেন মোয়াজী</span>
+              <span class="divider"></span>
+              <span>মোবা: 01711-662074, 01834-863675</span>
+            </div>
+          </div>
+
+          <div class="office-bars">
+            <div class="office-bar">হেড অফিস: তামাবিল, গোয়াইনঘাট, সিলেট।</div>
+            <div class="office-bar">শাখা অফিস: সুতারকান্দি, সিলেট।</div>
+          </div>
+
+          <div class="divider-line"></div>
+
+          <table class="data-table info-table">
+            <tbody>
+              <tr>
+                <th>তারিখ</th>
+                <td>${date}</td>
+              </tr>
+              <tr>
+                <th>চালান নং</th>
+                <td class="strong">${challanNo}</td>
+              </tr>
+              <tr>
+                <th>গ্রাহকের নাম</th>
+                <td class="strong">${customer}</td>
+              </tr>
+              <tr>
+                <th>গাড়ি</th>
+                <td>${vehicle}</td>
+              </tr>
+              ${mobile ? `
+              <tr>
+                <th>মোবাইল</th>
+                <td>${mobile}</td>
+              </tr>` : ''}
+              ${address ? `
+              <tr>
+                <th>ঠিকানা</th>
+                <td>${address}</td>
+              </tr>` : ''}
+            </tbody>
+          </table>
+
+          <div class="spacer-row"></div>
+
+          <table class="data-table calc-table">
+            <tbody>
+              <tr>
+                <th>টন</th>
+                <td>${tons}</td>
+                <th>ফুট</th>
+                <td>${feet}</td>
+              </tr>
+              <tr>
+                <th>গুণ</th>
+                <td>${feetPerTon}</td>
+                <th>দর (ফুট প্রতি)</th>
+                <td>${rate}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="spacer-row"></div>
+
+          <table class="data-table payment-table">
+            <tbody>
+              <tr>
+                <th>মোট টাকা</th>
+                <td class="strong highlight">${amount}</td>
+              </tr>
+              <tr>
+                <th>জমা</th>
+                <td>${deposited}</td>
+              </tr>
+              <tr>
+                <th>অবশিষ্ট</th>
+                <td class="strong remain">${remaining}</td>
+              </tr>
+              <tr>
+                <th>পাওনা</th>
+                <td class="strong due">${due}</td>
+              </tr>
+              <tr>
+                <th>বিবরণ</th>
+                <td>${description}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer-block">
+            <div class="sig-row">
+              <div class="sig-col">
+                <span class="sig-line"></span>
+                <span class="sig-label">ড্রাইভারের স্বাক্ষর</span>
+              </div>
+              <div class="sig-col">
+                <span class="sig-line"></span>
+                <span class="sig-label">ক্রেতার স্বাক্ষর</span>
+              </div>
+              <div class="sig-col right">
+                <span class="sig-line"></span>
+                <span class="sig-label small">পক্ষে: মেসার্স সাইফুল ট্রেডার্স এন্ড স্টোন ক্রাশার</span>
+              </div>
+            </div>
+
+            <div class="footer-banner">
+              <span class="banner-left">সততা ব্যবসার মূলধন</span>
+              <span class="banner-right">ধন্যবাদ আবার আসবেন</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
     const slipHtml = `
       <html>
         <head>
-          <title>Saiful Traders Sales Slip</title>
+          <title>Saiful Traders Sales Slip — চালান নং ${challanNo}</title>
           <style>
-            * {
-              box-sizing: border-box;
-            }
-            body {
-              font-family: Arial, sans-serif;
+            * { box-sizing: border-box; }
+            html, body {
               margin: 0;
-              padding: 28px;
-              background: #f3f4f6;
+              padding: 0;
+              font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
               color: #111827;
+              background: #eef2f7;
             }
+
+            .page {
+              width: 297mm;
+              height: 210mm;
+              padding: 5mm;
+              margin: 10px auto;
+              background: #fff;
+              display: flex;
+              flex-direction: row;
+              gap: 5mm;
+              box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+            }
+
             .slip {
-              max-width: 820px;
-              margin: 0 auto;
+              flex: 1;
               background: #ffffff;
-              border: 1px solid #d1d5db;
-              border-radius: 18px;
-              box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-              padding: 28px 26px 22px;
+              border: 1px solid #cdd5e1;
+              border-radius: 6px;
+              overflow: hidden;
+              display: flex;
             }
-            .title {
-              font-size: 14px;
-              font-weight: 700;
+            .slip-inner {
+              width: 100%;
+              padding: 10px 14px 10px;
+              display: flex;
+              flex-direction: column;
+              gap: 6px;
+            }
+
+            .business-header {
               text-align: center;
-              margin: 0 0 6px;
-              color: #6b7280;
-              letter-spacing: 1px;
-              text-transform: uppercase;
+              color: #1e3a8a;
+              position: relative;
             }
-            .customer-banner {
-              text-align: center;
-              background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
-              color: #ffffff;
-              border-radius: 14px;
-              padding: 16px 20px;
-              margin-bottom: 20px;
-            }
-            .customer-big-name {
-              font-size: 26px;
-              font-weight: 800;
-              line-height: 1.2;
-              margin-bottom: 6px;
-            }
-            .customer-sub-meta {
-              font-size: 13px;
-              font-weight: 600;
-              color: #e2e8f0;
+            .header-top-row {
               display: flex;
               align-items: center;
               justify-content: center;
-              gap: 16px;
-              flex-wrap: wrap;
+              gap: 10px;
+              margin-bottom: 2px;
             }
-            .grid {
+            .titles { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+            .mst-logo {
+              width: 42px;
+              height: 42px;
+              border: 2.5px solid #1e3a8a;
+              border-radius: 50%;
               display: grid;
-              grid-template-columns: repeat(2, minmax(220px, 1fr));
-              gap: 14px 18px;
-            }
-            .field {
-              border: 1px solid #e5e7eb;
-              border-radius: 12px;
-              background: #f9fafb;
-              padding: 10px 12px;
-              min-height: 68px;
-            }
-            .field.full {
-              grid-column: 1 / -1;
-            }
-            .label {
-              display: block;
-              font-size: 11px;
+              place-items: center;
+              font-family: 'Georgia', serif;
               font-weight: 700;
-              color: #374151;
-              text-transform: uppercase;
-              letter-spacing: 0.6px;
-              margin-bottom: 6px;
+              font-size: 14px;
+              letter-spacing: 0.5px;
+              color: #1e3a8a;
+              background: #fff;
+              flex-shrink: 0;
+              position: relative;
             }
-            .value {
-              display: block;
-              font-size: 17px;
+            .mst-logo::after {
+              content: '';
+              position: absolute;
+              bottom: 5px; left: 6px; right: 6px;
+              height: 3px;
+              border-top: 1.5px solid #1e3a8a;
+              border-bottom: 1.5px solid #1e3a8a;
+              opacity: 0.6;
+            }
+            .copy-tag {
+              min-width: 70px;
+              padding: 3px 8px;
+              border: 1.5px solid #1e3a8a;
+              border-radius: 999px;
+              color: #1e3a8a;
+              font-weight: 700;
+              font-size: 10px;
+              letter-spacing: 0.3px;
+              background: #eff6ff;
+              flex-shrink: 0;
+              text-align: center;
+            }
+            .bn-company {
+              font-size: 18px;
+              font-weight: 800;
+              line-height: 1.15;
+              color: #1e3a8a;
+              margin: 0;
+            }
+            .en-company {
+              font-family: 'Georgia', serif;
+              font-size: 15px;
+              font-weight: 700;
+              letter-spacing: 0.5px;
+              color: #1e3a8a;
+              margin: 0;
+              line-height: 1.15;
+            }
+            .tagline {
+              font-size: 10.5px;
+              font-weight: 500;
+              color: #1f2937;
+              margin: 2px 0 4px;
+              line-height: 1.35;
+            }
+            .contact-pill {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              flex-wrap: wrap;
+              gap: 4px 10px;
+              background: #1e3a8a;
+              color: #ffffff;
+              padding: 4px 14px;
+              border-radius: 999px;
+              font-weight: 700;
+              font-size: 10.5px;
+            }
+            .contact-pill .divider {
+              width: 1px; height: 12px; background: rgba(255,255,255,0.25);
+            }
+
+            .office-bars {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 6px;
+            }
+            .office-bar {
+              background: #1e3a8a;
+              color: #ffffff;
+              padding: 5px 10px;
               font-weight: 600;
-              color: #111827;
-              line-height: 1.45;
-              word-break: break-word;
+              font-size: 10.5px;
+              border-radius: 4px;
+              text-align: center;
+              line-height: 1.25;
             }
-            .total-box {
-              margin-top: 18px;
-              border: 1px solid #dbeafe;
-              background: linear-gradient(135deg, #eff6ff, #f8fafc);
-              border-radius: 12px;
-              padding: 14px 16px;
+
+            .divider-line {
+              height: 2px;
+              background: linear-gradient(90deg, transparent, #1e3a8a 20%, #1e3a8a 80%, transparent);
+              opacity: 0.55;
+            }
+
+            .spacer-row {
+              height: 8px;
+            }
+
+            .data-table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 12px;
+              table-layout: fixed;
+            }
+            .data-table th, .data-table td {
+              border: 1px solid #c9d3e3;
+              padding: 7px 10px;
+              vertical-align: middle;
+              word-wrap: break-word;
+              line-height: 1.45;
+            }
+            .data-table th {
+              background: #eef4ff;
+              color: #1e3a8a;
+              font-weight: 700;
+              text-align: left;
+              width: 32%;
+              padding-right: 10px;
+            }
+            .data-table td {
+              color: #111827;
+              width: 68%;
+            }
+            .data-table .strong { font-weight: 700; color: #111827; }
+            .data-table .highlight { color: #1e3a8a; font-weight: 800; }
+            .data-table .remain { color: #047857; }
+            .data-table .due { color: #b91c1c; }
+
+            /* ── Info / Calc / Payment tables: common look ── */
+            .data-table.info-table,
+            .data-table.calc-table,
+            .data-table.payment-table {
+              border: 1.5px solid #94a3b8;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            }
+            .data-table.info-table th,
+            .data-table.calc-table th,
+            .data-table.payment-table th {
+              font-size: 11.5px;
+              letter-spacing: 0.2px;
+            }
+            .data-table.info-table td,
+            .data-table.calc-table td,
+            .data-table.payment-table td {
+              font-size: 12.5px;
+              background: #ffffff;
+            }
+            /* zebra stripe (light alt) */
+            .data-table.info-table tr:nth-child(even) td,
+            .data-table.calc-table tr:nth-child(even) td,
+            .data-table.payment-table tr:nth-child(even) td {
+              background: #fafbff;
+            }
+            .data-table.info-table tr:nth-child(even) th,
+            .data-table.calc-table tr:nth-child(even) th,
+            .data-table.payment-table tr:nth-child(even) th {
+              background: #e8efff;
+            }
+
+            /* ── Calc table: 4 equal columns (25% each) 2 rows — PLAIN style ── */
+            .data-table.calc-table th,
+            .data-table.calc-table td {
+              width: 25%;
+            }
+            .data-table.calc-table th {
+              background: #eef4ff;
+              color: #1e3a8a;
+              font-weight: 700;
+              text-align: left;
+              border: 1px solid #c9d3e3;
+              padding: 7px 10px;
+            }
+            .data-table.calc-table td {
+              color: #111827;
+              background: #ffffff;
+              border: 1px solid #c9d3e3;
+              border-top: none;
+              padding: 7px 10px;
+            }
+            .data-table.calc-table tr:nth-child(even) td {
+              background: #fafbff;
+            }
+            .data-table.calc-table tr:nth-child(even) th {
+              background: #e8efff;
+            }
+
+            .footer-block {
+              margin-top: auto;
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              padding-top: 2px;
+            }
+
+            .sig-row {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              gap: 12px;
+              padding: 2px 0 0;
+              width: 100%;
+            }
+            .sig-col {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 5px;
+              flex: 1;
+              min-width: 0;
+            }
+            .sig-col:first-child {
+              align-items: flex-start;
+            }
+            .sig-col.right {
+              align-items: flex-end;
+            }
+            .sig-line {
+              width: 100%;
+              border-top: 1.25px dashed #6b7280;
+              height: 1px;
+              flex-shrink: 0;
+            }
+            .sig-label {
+              font-size: 10.5px;
+              color: #374151;
+              font-weight: 600;
+              line-height: 1.35;
+              text-align: center;
+            }
+            .sig-col:first-child .sig-label { text-align: left; }
+            .sig-col.right .sig-label { text-align: right; }
+            .sig-label.small {
+              font-size: 9.5px;
+              text-align: right;
+              line-height: 1.25;
+              max-width: none;
+            }
+
+            .footer-banner {
               display: flex;
               justify-content: space-between;
               align-items: center;
+              background: #1e3a8a;
+              color: #ffffff;
+              padding: 7px 18px;
               font-weight: 700;
-              color: #1f2937;
+              font-size: 12px;
+              border-radius: 5px;
+              gap: 12px;
+              box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
             }
-            .total-box strong {
-              font-size: 26px;
-              color: #1d4ed8;
+            .banner-left {
+              flex: 1;
+              text-align: left;
+            }
+            .banner-right {
+              flex: 1;
+              text-align: right;
+              position: relative;
+            }
+            .banner-left::after {
+              content: '';
+              position: absolute;
+              top: 0;
+              bottom: 0;
+              left: 50%;
+              width: 1px;
+              background: rgba(255,255,255,0.25);
+              display: none;
+            }
+
+            @media screen {
+              .slip + .slip {
+                page-break-before: auto;
+              }
+            }
+            @media print {
+              @page {
+                size: A4 landscape;
+                margin: 0;
+              }
+              html, body {
+                background: #fff;
+                margin: 0;
+                padding: 0;
+              }
+              .page {
+                margin: 0;
+                box-shadow: none;
+                padding: 6mm;
+                width: 297mm;
+                height: 210mm;
+                page-break-after: always;
+              }
+              .page:last-child {
+                page-break-after: auto;
+              }
             }
           </style>
         </head>
         <body>
-          <div class="slip">
-            <div class="title">Saiful Traders — Sales Slip</div>
-
-            <div class="customer-banner">
-              <div class="customer-big-name">${lastSlip.customer}</div>
-              ${(lastSlip.mobile || lastSlip.address) ? `
-                <div class="customer-sub-meta">
-                  ${lastSlip.mobile ? `<span>📞 মোবাইল: ${lastSlip.mobile}</span>` : ''}
-                  ${lastSlip.address ? `<span>📍 ঠিকানা: ${lastSlip.address}</span>` : ''}
-                </div>
-              ` : ''}
-            </div>
-
-            <div class="grid">
-              <div class="field">
-                <span class="label">তারিখ</span>
-                <span class="value">${lastSlip.date}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">গ্রাহকের নাম</span>
-                <span class="value">${lastSlip.customer}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">গাড়ি</span>
-                <span class="value">${lastSlip.vehicle || '—'}</span>
-              </div>
-              <div class="field">
-                <span class="label">ফুট</span>
-                <span class="value">${Number(lastSlip.feet || 0)}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">দর</span>
-                <span class="value">৳ ${Number(lastSlip.rate || 0).toLocaleString('en-BD')}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">জমা</span>
-                <span class="value">৳ ${Number(lastSlip.deposited || 0).toLocaleString('en-BD')}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">অবশিষ্ট</span>
-                <span class="value">৳ ${Number(lastSlip.remaining || 0).toLocaleString('en-BD')}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">পাওনা</span>
-                <span class="value">৳ ${Number(lastSlip.due || 0).toLocaleString('en-BD')}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">টন</span>
-                <span class="value">${Number(lastSlip.tons || 0).toLocaleString('en-BD')}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">টাকা</span>
-                <span class="value">৳ ${Number(lastSlip.amount || 0).toLocaleString('en-BD')}</span>
-              </div>
-
-              <div class="field full">
-                <span class="label">বিবরণ</span>
-                <span class="value">${lastSlip.description || '—'}</span>
-              </div>
-
-              <div class="field">
-                <span class="label">চালান নং</span>
-                <span class="value">${lastSlip.challanNo || '—'}</span>
-              </div>
-
-            </div>
-
-            <div class="total-box">
-              <span>মোট মূল্য</span>
-              <strong>৳ ${Number(lastSlip.amount || 0).toLocaleString('en-BD')}</strong>
-            </div>
+          <div class="page">
+            ${buildSlip('অফিস কপি')}
+            ${buildSlip('গ্রাহকের কপি')}
           </div>
         </body>
       </html>
@@ -710,7 +1036,7 @@ export default function ProjectDashboardPage() {
     printWindow.document.write(slipHtml);
     printWindow.document.close();
     printWindow.focus();
-    printWindow.print();
+    setTimeout(() => printWindow.print(), 250);
   };
 
   if (!isLoggedIn) {
@@ -782,11 +1108,11 @@ export default function ProjectDashboardPage() {
         </div>
 
         <div className="header-actions">
-          <button type="button" onClick={handleAddCustomer} className="secondary-btn small-btn action-btn" title="কাস্টমার যোগ করুন">
+          <button type="button" onClick={handleAddCustomer} className="secondary-btn small-btn action-btn add-customer-btn" title="কাস্টমার যোগ করুন">
             <span aria-hidden="true">＋</span>
             <span>কাস্টমার যোগ করুন</span>
           </button>
-          <button type="button" onClick={handleDeleteCustomer} className="secondary-btn small-btn action-btn" title="কাস্টমার ডিলেট করুন">
+          <button type="button" onClick={handleDeleteCustomer} className="secondary-btn small-btn action-btn delete-customer-btn" title="কাস্টমার ডিলেট করুন">
             <span aria-hidden="true">−</span>
             <span>কাস্টমার ডিলেট করুন</span>
           </button>

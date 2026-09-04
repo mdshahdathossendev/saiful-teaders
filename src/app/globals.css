@@ -1686,6 +1686,11 @@ img {
     justify-content: center;
   }
 
+  .add-customer-btn,
+  .delete-customer-btn {
+    display: none !important;
+  }
+
   .action-btn,
   .small-btn,
   .full-width-btn {

@@ -145,14 +145,14 @@ function jsonResponse(data) {
 
 function ensureCustomerTitleHeader(sheet, customerName, address, mobile) {
   const firstCell = String(sheet.getRange(1, 1).getValue() || '').trim();
-  
+
   if (firstCell === 'তারিখ') {
     sheet.insertRowsBefore(1, 2);
   }
 
   const lastCol = HEADERS.length;
   const nameText = customerName || sheet.getName();
-  
+
   const phoneText = mobile ? `📞 মোবাইল: ${mobile}` : '';
   const addrText = address ? `📍 ঠিকানা: ${address}` : '';
   const metaText = [phoneText, addrText].filter(Boolean).join('   |   ') || 'কাস্টমার হিসাব শিট';
