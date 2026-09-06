@@ -1,7 +1,7 @@
 'use client';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEFAULT_USERNAME = 'সাইফুল';
 const DEFAULT_PASSWORD = 'সাইফুল১২৩';
@@ -21,12 +21,25 @@ const BUSINESS_OPTIONS = [
 
 const DEFAULT_INITIAL_CHALLAN = 5000;
 
+const getAmountSizeClass = (rawValue) => {
+  const str = String(Number(rawValue || 0).toLocaleString('bn-BD'));
+  const len = str.length;
+  if (len >= 14) return 'size-14';
+  if (len >= 12) return 'size-12';
+  if (len >= 10) return 'size-10';
+  if (len >= 8) return 'size-8';
+  return '';
+};
+
 const getInitialForm = () => ({
   date: new Date().toISOString().split('T')[0],
   business: '',
   customer: '',
   vehicle: '',
   description: '',
+  length: '',
+  width: '',
+  height: '',
   feet: '0',
   rate: '',
   amount: '',
@@ -66,6 +79,7 @@ export default function ProjectDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingData, setIsFetchingData] = useState(false);
   const [form, setForm] = useState(() => getInitialForm());
+  const [feetMode, setFeetMode] = useState('tons');
   const [customerOptions, setCustomerOptions] = useState([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -73,6 +87,15 @@ export default function ProjectDashboardPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', mobile: '', address: '' });
   const customerSummaryRequest = useRef(0);
+  const [globalSummary, setGlobalSummary] = useState({
+    globalDeposited: 0,
+    globalRemaining: 0,
+    globalDue: 0,
+  });
+  const [isLoadingGlobalSummary, setIsLoadingGlobalSummary] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [pollingEnabled, setPollingEnabled] = useState(true);
+  const pollingRef = useRef(null);
 
   const fetchNextChallanNo = async () => {
     setIsFetchingData(true);
@@ -90,28 +113,166 @@ export default function ProjectDashboardPage() {
     }
   };
 
-  const fetchCustomers = async () => {
-    setIsFetchingData(true);
+  const fetchCustomers = async (isSilent = false) => {
+    if (!isSilent) setIsFetchingData(true);
     try {
-      const response = await fetch('/api/customers');
+      const response = await fetch('/api/customers', { cache: 'no-store' });
       if (response.ok) {
         const data = await response.json();
         if (data.ok && data.customers) {
-          setCustomerOptions(data.customers);
+          const incoming = data.customers;
+          setCustomerOptions(incoming);
           queueMicrotask(() => {
             setForm((prev) => {
-              if (!prev.customer && data.customers.length > 0) {
-                const firstCustomer = data.customers[0].name;
-                queueMicrotask(() => fetchCustomerSummary(firstCustomer));
+              if (incoming.length === 0) {
+                if (prev.customer) {
+                  customerSummaryRequest.current += 1;
+                }
+                return {
+                  ...prev,
+                  customer: '',
+                  depositedTotal: '0',
+                  depositedBase: '0',
+                  deposited: '0',
+                  remaining: '0',
+                  due: '0',
+                  remainingBase: '0',
+                  dueBase: '0',
+                  totalAmountBase: '0',
+                };
+              }
+
+              if (!prev.customer) {
+                const firstCustomer = incoming[0].name;
+                queueMicrotask(() => fetchCustomerSummary(firstCustomer, isSilent));
                 return { ...prev, customer: firstCustomer };
               }
-              return prev;
+
+              const exactMatch = incoming.find(
+                (c) => c.name.toLowerCase() === prev.customer.toLowerCase()
+              );
+              if (exactMatch) {
+                return prev;
+              }
+
+              const matchedByMobile = incoming.find((c) => {
+                const a = (c.mobile || '').replace(/\D/g, '');
+                const b = (prev.customer || '').replace(/\D/g, '');
+                return a && b && (a.includes(b) || b.includes(a));
+              });
+              const fallback = matchedByMobile || incoming[0];
+              const fallbackName = fallback.name;
+
+              queueMicrotask(() => fetchCustomerSummary(fallbackName, isSilent));
+
+              customerSummaryRequest.current += 1;
+              return {
+                ...prev,
+                customer: fallbackName,
+                depositedTotal: '0',
+                depositedBase: '0',
+                deposited: '0',
+                remaining: '0',
+                due: '0',
+                remainingBase: '0',
+                dueBase: '0',
+                totalAmountBase: '0',
+                length: '',
+                width: '',
+                height: '',
+                tons: '0',
+                feetPerTon: '0',
+                feet: '0',
+                rate: '',
+                amount: '',
+              };
             });
           });
         }
       }
     } catch (e) {}
-    setIsFetchingData(false);
+    if (!isSilent) setIsFetchingData(false);
+  };
+
+  const fetchGlobalSummary = async (isSilent = false) => {
+    if (!isSilent) setIsLoadingGlobalSummary(true);
+    try {
+      const response = await fetch('/api/global-summary', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        setGlobalSummary({
+          globalDeposited: Number(data.globalDeposited) || 0,
+          globalRemaining: Number(data.globalRemaining) || 0,
+          globalDue: Number(data.globalDue) || 0,
+        });
+      }
+    } catch (e) {}
+    if (!isSilent) setIsLoadingGlobalSummary(false);
+  };
+
+  const fetchCustomerSummary = async (customerName, isSilent = false) => {
+    if (!isSilent) setIsFetchingData(true);
+    const requestId = customerSummaryRequest.current + 1;
+    customerSummaryRequest.current = requestId;
+
+    if (!customerName) {
+      if (!isSilent) setIsFetchingData(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/customer-summary?customer=${encodeURIComponent(customerName)}`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        if (!isSilent) setIsFetchingData(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (customerSummaryRequest.current !== requestId) {
+        if (!isSilent) setIsFetchingData(false);
+        return;
+      }
+
+      setForm((previousForm) => {
+        if (previousForm.customer !== customerName) {
+          return previousForm;
+        }
+
+        return {
+          ...previousForm,
+          depositedTotal: String(Number(data.deposited) || 0),
+          depositedBase: String(Number(data.deposited) || 0),
+          remaining: String(Number(data.remaining) || 0),
+          due: String(Number(data.due) || 0),
+          remainingBase: String(Number(data.remaining) || 0),
+          dueBase: String(Number(data.due) || 0),
+          totalAmountBase: String(Number(data.totalAmount) || 0),
+        };
+      });
+    } catch (error) {
+      if (customerSummaryRequest.current !== requestId) {
+        if (!isSilent) setIsFetchingData(false);
+        return;
+      }
+
+      setForm((previousForm) => {
+        if (previousForm.customer !== customerName) {
+          return previousForm;
+        }
+
+        return {
+          ...previousForm,
+          depositedTotal: '0',
+          depositedBase: '0',
+          remaining: '0',
+          due: '0',
+        };
+      });
+    } finally {
+      if (!isSilent) setIsFetchingData(false);
+    }
   };
 
   const handleLogin = (event) => {
@@ -124,12 +285,63 @@ export default function ProjectDashboardPage() {
       queueMicrotask(() => {
         fetchNextChallanNo();
         fetchCustomers();
+        fetchGlobalSummary();
       });
       return;
     }
 
-    setError('ভুল ইউজারনেম বা পাসওয়ার্ড দিয়েছেন পুনরায় আবার চেষ্টা করুন');
+    setError('ভুল ইউজারনেম বা পাসওয়ার্ড দিয়েছেন পুনরায় আবার চেষ্টা করুন');
   };
+
+  const refreshAllNow = useCallback(
+    async (isSilent = true) => {
+      await Promise.all([
+        fetchCustomers(isSilent),
+        fetchGlobalSummary(isSilent),
+        form.customer ? fetchCustomerSummary(form.customer, isSilent) : Promise.resolve(),
+      ]);
+      setLastSyncedAt(new Date());
+    },
+    [form.customer, fetchCustomers, fetchGlobalSummary, fetchCustomerSummary]
+  );
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      return;
+    }
+
+    if (!pollingEnabled) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      return;
+    }
+
+    pollingRef.current = setInterval(() => {
+      refreshAllNow(true);
+    }, 5000);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [isLoggedIn, pollingEnabled, refreshAllNow]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, []);
 
   const toEnglishNumber = (value) => {
     const banglaDigits = {
@@ -148,6 +360,33 @@ export default function ProjectDashboardPage() {
     return String(value ?? '').replace(/[০-৯]/g, (digit) => banglaDigits[digit] || digit);
   };
 
+  /**
+   * নতুন sale এর পর remaining ও due হিসাব করে।
+   *
+   * নিয়ম:
+   *  ১. নতুন টাকা (amount) আগে পুরনো অবশিষ্ট (remainingBase) থেকে বাদ যাবে।
+   *  ২. অবশিষ্ট কম হলে বাকি টাকা পাওনায় (dueBase-তে) যোগ হবে।
+   *  ৩. তারপর নতুন জমা (deposited) দিয়ে পাওনা / অবশিষ্ট আপডেট হবে।
+   */
+  const recalcBalance = (remainingBase, dueBase, amount, deposited) => {
+    // ধাপ ১ — নতুন বিক্রি
+    const afterSale = remainingBase - amount;
+    let rem = Math.max(afterSale, 0);
+    let due = dueBase + Math.max(-afterSale, 0);
+
+    // ধাপ ২ — নতুন জমা
+    const afterDeposit = rem + deposited - due;
+    if (afterDeposit >= 0) {
+      rem = afterDeposit;
+      due = 0;
+    } else {
+      rem = 0;
+      due = -afterDeposit;
+    }
+
+    return { remaining: rem, due };
+  };
+
   const handleNumberInput = (fieldName, value) => {
     const sanitizedValue = String(value)
       .replace(/[^\d.০-৯]/g, '')
@@ -159,32 +398,89 @@ export default function ProjectDashboardPage() {
         [fieldName]: sanitizedValue,
       };
 
-      if (fieldName === 'tons' || fieldName === 'feetPerTon') {
-        const tons = Number(toEnglishNumber(nextForm.tons)) || 0;
-        const feetPerTon = Number(toEnglishNumber(nextForm.feetPerTon)) || 0;
-        nextForm.feet = String(tons * feetPerTon);
+      if (
+        feetMode === 'measurement' &&
+        (fieldName === 'length' || fieldName === 'width' || fieldName === 'height')
+      ) {
+        const length = Number(toEnglishNumber(nextForm.length)) || 0;
+        const width = Number(toEnglishNumber(nextForm.width)) || 0;
+        const height = Number(toEnglishNumber(nextForm.height)) || 0;
+        if (length > 0 && width > 0 && height > 0) {
+          nextForm.feet = String(length * width * height);
+        }
       }
 
-      if (fieldName === 'tons' || fieldName === 'feetPerTon' || fieldName === 'rate') {
+      if (
+        feetMode === 'tons' &&
+        (fieldName === 'tons' || fieldName === 'feetPerTon')
+      ) {
+        const tons = Number(toEnglishNumber(nextForm.tons)) || 0;
+        const feetPerTon = Number(toEnglishNumber(nextForm.feetPerTon)) || 0;
+        if (tons > 0 && feetPerTon > 0) {
+          nextForm.feet = String(tons * feetPerTon);
+        }
+      }
+
+      if (
+        (feetMode === 'tons' && (fieldName === 'tons' || fieldName === 'feetPerTon' || fieldName === 'rate')) ||
+        (feetMode === 'measurement' && (fieldName === 'length' || fieldName === 'width' || fieldName === 'height' || fieldName === 'rate')) ||
+        fieldName === 'rate'
+      ) {
         const feet = Number(toEnglishNumber(nextForm.feet)) || 0;
         const rate = Number(toEnglishNumber(nextForm.rate)) || 0;
         nextForm.amount = String(feet * rate);
       }
 
-      if (fieldName === 'deposited' || fieldName === 'tons' || fieldName === 'feetPerTon' || fieldName === 'rate') {
+      if (
+        fieldName === 'deposited' ||
+        (feetMode === 'tons' && (fieldName === 'tons' || fieldName === 'feetPerTon' || fieldName === 'rate')) ||
+        (feetMode === 'measurement' && (fieldName === 'length' || fieldName === 'width' || fieldName === 'height' || fieldName === 'rate'))
+      ) {
         const deposited = Number(toEnglishNumber(nextForm.deposited)) || 0;
         const amount = Number(toEnglishNumber(nextForm.amount)) || 0;
         const remainingBase = Number(toEnglishNumber(nextForm.remainingBase)) || 0;
         const dueBase = Number(toEnglishNumber(nextForm.dueBase)) || 0;
-        const netBalance = remainingBase - dueBase + deposited - amount;
-        nextForm.remaining = String(Math.max(netBalance, 0));
-        nextForm.due = String(Math.max(-netBalance, 0));
+        const { remaining, due } = recalcBalance(remainingBase, dueBase, amount, deposited);
+        nextForm.remaining = String(remaining);
+        nextForm.due = String(due);
         if (fieldName === 'deposited') {
           const depositedBase = Number(toEnglishNumber(nextForm.depositedBase)) || 0;
           nextForm.depositedTotal = String(depositedBase + deposited);
         }
       }
 
+      return nextForm;
+    });
+  };
+
+  const handleFeetModeChange = (mode) => {
+    setFeetMode(mode);
+    setForm((previousForm) => {
+      const nextForm = { ...previousForm };
+      if (mode === 'measurement') {
+        const length = Number(toEnglishNumber(nextForm.length)) || 0;
+        const width = Number(toEnglishNumber(nextForm.width)) || 0;
+        const height = Number(toEnglishNumber(nextForm.height)) || 0;
+        if (length > 0 && width > 0 && height > 0) {
+          nextForm.feet = String(length * width * height);
+        }
+      } else {
+        const tons = Number(toEnglishNumber(nextForm.tons)) || 0;
+        const feetPerTon = Number(toEnglishNumber(nextForm.feetPerTon)) || 0;
+        if (tons > 0 && feetPerTon > 0) {
+          nextForm.feet = String(tons * feetPerTon);
+        }
+      }
+      const feet = Number(toEnglishNumber(nextForm.feet)) || 0;
+      const rate = Number(toEnglishNumber(nextForm.rate)) || 0;
+      nextForm.amount = String(feet * rate);
+      const deposited = Number(toEnglishNumber(nextForm.deposited)) || 0;
+      const amount = Number(toEnglishNumber(nextForm.amount)) || 0;
+      const remainingBase = Number(toEnglishNumber(nextForm.remainingBase)) || 0;
+      const dueBase = Number(toEnglishNumber(nextForm.dueBase)) || 0;
+      const { remaining, due } = recalcBalance(remainingBase, dueBase, amount, deposited);
+      nextForm.remaining = String(remaining);
+      nextForm.due = String(due);
       return nextForm;
     });
   };
@@ -196,17 +492,23 @@ export default function ProjectDashboardPage() {
     const customer = form.customer.trim();
     const vehicle = form.vehicle.trim();
     const description = form.description.trim();
+    const length = Number(toEnglishNumber(form.length)) || 0;
+    const width = Number(toEnglishNumber(form.width)) || 0;
+    const height = Number(toEnglishNumber(form.height)) || 0;
     const tons = Number(toEnglishNumber(form.tons)) || 0;
     const feetPerTon = Number(toEnglishNumber(form.feetPerTon)) || 0;
-    const feet = tons * feetPerTon;
+    let feet = 0;
+    if (length > 0 && width > 0 && height > 0) {
+      feet = length * width * height;
+    } else if (tons > 0 && feetPerTon > 0) {
+      feet = tons * feetPerTon;
+    }
     const rate = Number(toEnglishNumber(form.rate)) || 0;
     const amount = feet * rate;
     const deposited = Number(toEnglishNumber(form.deposited)) || 0;
     const remainingBase = Number(toEnglishNumber(form.remainingBase)) || 0;
     const dueBase = Number(toEnglishNumber(form.dueBase)) || 0;
-    const netBalance = remainingBase - dueBase + deposited - amount;
-    const remaining = Math.max(netBalance, 0);
-    const due = Math.max(-netBalance, 0);
+    const { remaining, due } = recalcBalance(remainingBase, dueBase, amount, deposited);
     const challanNo = form.challanNo.trim();
 
     if (GOOGLE_SHEET_WEB_APP_URL === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
@@ -234,6 +536,16 @@ export default function ProjectDashboardPage() {
     let errorDetail = '';
 
     try {
+    const outLength = feetMode === 'measurement' ? length : '';
+      const outWidth = feetMode === 'measurement' ? width : '';
+      const outHeight = feetMode === 'measurement' ? height : '';
+      const outTons = feetMode === 'tons' ? tons : '';
+      const outFeetPerTon = feetMode === 'tons' ? feetPerTon : '';
+      const vehicleMeasurementFeet =
+        feetMode === 'measurement' && length > 0 && width > 0 && height > 0
+          ? length * width * height
+          : '';
+
       const payload = {
         date: form.date,
         business,
@@ -243,14 +555,19 @@ export default function ProjectDashboardPage() {
         address,
         vehicle,
         description,
+        feetMode,
+        length: outLength,
+        width: outWidth,
+        height: outHeight,
+        vehicleMeasurementFeet,
         feet,
         rate,
         amount,
         deposited,
         remaining,
         due,
-        tons,
-        feetPerTon,
+        tons: outTons,
+        feetPerTon: outFeetPerTon,
         challanNo,
         createdAt: new Date().toISOString(),
       };
@@ -306,7 +623,7 @@ export default function ProjectDashboardPage() {
         customer,
         challanNo: String(nextChallanNum),
       });
-      await fetchCustomerSummary(customer);
+      await refreshAllNow(false);
     } catch (submitError) {
       const msg = submitError?.message || String(submitError || '');
       const finalMsg = msg
@@ -327,69 +644,6 @@ export default function ProjectDashboardPage() {
     setStatus('');
   };
 
-  const fetchCustomerSummary = async (customerName) => {
-    setIsFetchingData(true);
-    const requestId = customerSummaryRequest.current + 1;
-    customerSummaryRequest.current = requestId;
-
-    if (!customerName) {
-      setIsFetchingData(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/customer-summary?customer=${encodeURIComponent(customerName)}`);
-      if (!response.ok) {
-        setIsFetchingData(false);
-        return;
-      }
-
-      const data = await response.json();
-      if (customerSummaryRequest.current !== requestId) {
-        setIsFetchingData(false);
-        return;
-      }
-
-      setForm((previousForm) => {
-        if (previousForm.customer !== customerName) {
-          return previousForm;
-        }
-
-        return {
-          ...previousForm,
-          depositedTotal: String(Number(data.deposited) || 0),
-          depositedBase: String(Number(data.deposited) || 0),
-          remaining: String(Number(data.remaining) || 0),
-          due: String(Number(data.due) || 0),
-          remainingBase: String(Number(data.remaining) || 0),
-          dueBase: String(Number(data.due) || 0),
-          totalAmountBase: String(Number(data.totalAmount) || 0),
-        };
-      });
-    } catch (error) {
-      if (customerSummaryRequest.current !== requestId) {
-        setIsFetchingData(false);
-        return;
-      }
-
-      setForm((previousForm) => {
-        if (previousForm.customer !== customerName) {
-          return previousForm;
-        }
-
-        return {
-          ...previousForm,
-          depositedTotal: '0',
-          depositedBase: '0',
-          remaining: '0',
-          due: '0',
-        };
-      });
-    } finally {
-      setIsFetchingData(false);
-    }
-  };
-
   const handleSelectCustomer = (customerName) => {
     const nextCustomer = customerName?.trim?.() || '';
     customerSummaryRequest.current += 1;
@@ -404,6 +658,14 @@ export default function ProjectDashboardPage() {
       remainingBase: '0',
       dueBase: '0',
       totalAmountBase: '0',
+      length: '',
+      width: '',
+      height: '',
+      tons: '0',
+      feetPerTon: '0',
+      feet: '0',
+      rate: '',
+      amount: '',
     }));
     fetchCustomerSummary(nextCustomer);
   };
@@ -477,14 +739,14 @@ export default function ProjectDashboardPage() {
       });
     } catch (e) {}
 
-    fetchCustomerSummary(trimmedName);
+    refreshAllNow(false);
   };
 
   const handleDeleteCustomer = async () => {
     const currentCustomer = form.customer.trim();
     if (!currentCustomer) return;
 
-    const confirmed = window.confirm(`"${currentCustomer}" নামটি মুছে ফেলবেন?`);
+    const confirmed = window.confirm(`⚠️  WARNING\n\n"${currentCustomer}" নামটি মুছে ফেললে ঐ গ্রাহকের সম্পূর্ণ হিসাব শিটসহ (সকল চালান, জমা-খরচের হিসাব) স্থায়ীভাবে মুছে যাবে।\n\nএখনও মুছে ফেলবেন?`);
     if (!confirmed) return;
 
     setCustomerOptions((prev) => {
@@ -502,6 +764,8 @@ export default function ProjectDashboardPage() {
         method: 'DELETE'
       });
     } catch (e) {}
+
+    queueMicrotask(() => refreshAllNow(false));
   };
 
   const handleDownloadSlip = () => {
@@ -521,6 +785,9 @@ export default function ProjectDashboardPage() {
     const address = lastSlip.address || '';
     const vehicle = lastSlip.vehicle || '—';
     const description = lastSlip.description || '—';
+    const length = Number(lastSlip.length || 0).toLocaleString('en-BD');
+    const width = Number(lastSlip.width || 0).toLocaleString('en-BD');
+    const height = Number(lastSlip.height || 0).toLocaleString('en-BD');
     const tons = Number(lastSlip.tons || 0).toLocaleString('en-BD');
     const feetPerTon = Number(lastSlip.feetPerTon || 0).toLocaleString('en-BD');
     const feet = Number(lastSlip.feet || 0).toLocaleString('en-BD');
@@ -605,6 +872,18 @@ export default function ProjectDashboardPage() {
                 <td>${feetPerTon}</td>
                 <th>দর (ফুট প্রতি)</th>
                 <td>${rate}</td>
+              </tr>
+              <tr>
+                <th>দৈর্ঘ্য</th>
+                <td>${length}</td>
+                <th>প্রস্থ</th>
+                <td>${width}</td>
+              </tr>
+              <tr>
+                <th>উচ্চতা</th>
+                <td>${height}</td>
+                <th>মোট ফুট (CFT)</th>
+                <td><strong>${feet}</strong></td>
               </tr>
             </tbody>
           </table>
@@ -1105,9 +1384,46 @@ export default function ProjectDashboardPage() {
         <div>
           <p className="login-tag">Saiful Traders</p>
           <h2>বিক্রয় হিসাব ড্যাশবোর্ড</h2>
+          <p className="sync-status-line">
+            <span
+              className={`sync-dot ${pollingEnabled ? 'sync-active' : 'sync-paused'}`}
+              aria-hidden="true"
+            />
+            {pollingEnabled ? 'অটো সিঙ্ক চালু আছে' : 'অটো সিঙ্ক বন্ধ'}
+            {lastSyncedAt && (
+              <>
+                <span className="sync-sep">•</span>
+                <span>শেষ সিঙ্ক: {lastSyncedAt.toLocaleTimeString('bn-BD')}</span>
+              </>
+            )}
+            {isLoadingGlobalSummary && (
+              <>
+                <span className="sync-sep">•</span>
+                <span className="sync-spinner-text">আপডেট হচ্ছে…</span>
+              </>
+            )}
+          </p>
         </div>
 
         <div className="header-actions">
+          <button
+            type="button"
+            onClick={() => refreshAllNow(false)}
+            className="secondary-btn small-btn action-btn"
+            title="এখনই রিফ্রেশ করুন (কাস্টমার তালিকা, হিসাব, গ্লোবাল সারাংশ)"
+          >
+            <span aria-hidden="true">⟳</span>
+            <span>এখন রিফ্রেশ</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPollingEnabled((v) => !v)}
+            className={`small-btn action-btn ${pollingEnabled ? 'primary-btn' : 'secondary-btn'}`}
+            title="অটো সিঙ্ক ৫ সেকেন্ডে শীতে শীতে চালু/বন্ধ করুন"
+          >
+            <span aria-hidden="true">{pollingEnabled ? '🔵' : '⚪'}</span>
+            <span>{pollingEnabled ? 'অটো সিঙ্ক ON' : 'অটো সিঙ্ক OFF'}</span>
+          </button>
           <button type="button" onClick={handleAddCustomer} className="secondary-btn small-btn action-btn add-customer-btn" title="কাস্টমার যোগ করুন">
             <span aria-hidden="true">＋</span>
             <span>কাস্টমার যোগ করুন</span>
@@ -1123,7 +1439,169 @@ export default function ProjectDashboardPage() {
         </div>
       </header>
 
+      <section className="stats-grid stats-grid-global">
+        <div className="global-summary-header">
+          <div className="gsh-left">
+            <span className="gsh-eyebrow">FINANCIAL OVERVIEW</span>
+            <h2 className="gsh-title">সংগঠনের মোট সারাংশ</h2>
+          </div>
+          <div className="gsh-right">
+            <span className="gsh-pill">
+              <span className="gsh-pill-dot" />
+              লাইভ সিঙ্কড
+            </span>
+          </div>
+        </div>
+
+        <article className="global-card g-card-deposited">
+          <div className="g-card-ornament" aria-hidden="true" />
+          <div className="g-card-head">
+            <div className="g-card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+                <path d="M22 13V9a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2" />
+                <path d="M17 14h.01" />
+              </svg>
+            </div>
+            <div className="g-card-badge">💰 ইনকামিং</div>
+          </div>
+          <div className="g-card-label">সকল গ্রাহক — মোট জমা</div>
+          <div className="g-card-amount">
+            <span className="g-card-currency">৳</span>
+            <span className={`g-card-number ${getAmountSizeClass(globalSummary.globalDeposited)}`}>
+              {Number(globalSummary.globalDeposited || 0).toLocaleString('bn-BD')}
+            </span>
+          </div>
+          <div className="g-card-foot">
+            <span className="g-card-trend up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                <path d="M7 17 17 7" />
+                <path d="M8 7h9v9" />
+              </svg>
+              পজিটিভ
+            </span>
+            <span className="g-card-divider" />
+            <span className="g-card-sub">জমা টাকার পরিমাণ</span>
+          </div>
+        </article>
+
+        <article className="global-card g-card-due">
+          <div className="g-card-ornament" aria-hidden="true" />
+          <div className="g-card-head">
+            <div className="g-card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              </svg>
+            </div>
+            <div className="g-card-badge">⚠️ পেন্ডিং</div>
+          </div>
+          <div className="g-card-label">সকল গ্রাহক — মোট পাওনা</div>
+          <div className="g-card-amount">
+            <span className="g-card-currency">৳</span>
+            <span className={`g-card-number ${getAmountSizeClass(globalSummary.globalDue)}`}>
+              {Number(globalSummary.globalDue || 0).toLocaleString('bn-BD')}
+            </span>
+          </div>
+          <div className="g-card-foot">
+            <span className="g-card-trend down">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                <path d="M7 7 17 17" />
+                <path d="M17 8v9H8" />
+              </svg>
+              আদায় বাকি
+            </span>
+            <span className="g-card-divider" />
+            <span className="g-card-sub">বাদেয় টাকার পরিমাণ</span>
+          </div>
+        </article>
+
+        <article className="global-card g-card-remaining">
+          <div className="g-card-ornament" aria-hidden="true" />
+          <div className="g-card-head">
+            <div className="g-card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <div className="g-card-badge">⏳ হিসাবধারী</div>
+          </div>
+          <div className="g-card-label">সকল গ্রাহক — মোট অবশিষ্ট</div>
+          <div className="g-card-amount">
+            <span className="g-card-currency">৳</span>
+            <span className={`g-card-number ${getAmountSizeClass(globalSummary.globalRemaining)}`}>
+              {Number(globalSummary.globalRemaining || 0).toLocaleString('bn-BD')}
+            </span>
+          </div>
+          <div className="g-card-foot">
+            <span className="g-card-trend up">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                <path d="M7 17 17 7" />
+                <path d="M8 7h9v9" />
+              </svg>
+              ক্যাশ ইন
+            </span>
+            <span className="g-card-divider" />
+            <span className="g-card-sub">আগামী রিসিভেবল</span>
+          </div>
+        </article>
+
+        <article className="global-card g-card-balance">
+          <div className="g-card-ornament" aria-hidden="true" />
+          <div className="g-card-head">
+            <div className="g-card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v18" />
+                <path d="M8 7h12l-4 5 4 5H8" />
+                <path d="M16 7H4l4 5-4 5h12" />
+              </svg>
+            </div>
+            <div className="g-card-badge">⚖️ নেট পজিশন</div>
+          </div>
+          <div className="g-card-label">নেট ব্যালেন্স (জমা − পাওনা)</div>
+          <div className="g-card-amount">
+            <span className="g-card-currency">৳</span>
+            <span className={`g-card-number ${getAmountSizeClass(
+              (Number(globalSummary.globalDeposited || 0) - Number(globalSummary.globalDue || 0)) || 0
+            )}`}>
+              {Number(
+                (Number(globalSummary.globalDeposited || 0) - Number(globalSummary.globalDue || 0)) || 0
+              ).toLocaleString('bn-BD')}
+            </span>
+          </div>
+          <div className="g-card-foot">
+            <span className={`g-card-trend ${
+              (Number(globalSummary.globalDeposited || 0) - Number(globalSummary.globalDue || 0)) >= 0
+                ? 'up'
+                : 'down'
+            }`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                {(Number(globalSummary.globalDeposited || 0) - Number(globalSummary.globalDue || 0)) >= 0 ? (
+                  <>
+                    <path d="M7 17 17 7" />
+                    <path d="M8 7h9v9" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M7 7 17 17" />
+                    <path d="M17 8v9H8" />
+                  </>
+                )}
+              </svg>
+              {(Number(globalSummary.globalDeposited || 0) - Number(globalSummary.globalDue || 0)) >= 0
+                ? 'ফাভারেবল'
+                : 'এডভার্স'}
+            </span>
+            <span className="g-card-divider" />
+            <span className="g-card-sub">বাস্তব হিসাব অবস্থা</span>
+          </div>
+        </article>
+      </section>
+
       <section className="stats-grid">
+        <p className="stats-section-label">নির্বাচিত গ্রাহকের সারাংশ — {form.customer || 'কেউ নির্বাচন করা হয়নি'}</p>
         <div className="stat-box">
           <span>মোট জমা</span>
           <strong>৳ {Number(form.depositedBase || 0).toLocaleString('bn-BD')}</strong>
@@ -1363,39 +1841,111 @@ export default function ProjectDashboardPage() {
             </label>
           </div>
 
+          <div className="feet-mode-selector" role="radiogroup" aria-label="ফুট ক্যালকুলেশন মোড">
+            <label className={`feet-mode-option ${feetMode === 'tons' ? 'active' : ''}`}>
+              <input
+                type="radio"
+                name="feetMode"
+                value="tons"
+                checked={feetMode === 'tons'}
+                onChange={() => handleFeetModeChange('tons')}
+              />
+              <span className="radio-dot" aria-hidden="true" />
+              <span>টন × গুণ</span>
+            </label>
+            <label className={`feet-mode-option ${feetMode === 'measurement' ? 'active' : ''}`}>
+              <input
+                type="radio"
+                name="feetMode"
+                value="measurement"
+                checked={feetMode === 'measurement'}
+                onChange={() => handleFeetModeChange('measurement')}
+              />
+              <span className="radio-dot" aria-hidden="true" />
+              <span>গাড়ির পরিমাপ</span>
+            </label>
+          </div>
+
           <div
-            className="inline-row"
+            className="inline-row formula-cards-grid"
             style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}
           >
-            <div className="formula-group">
-              <label>
-                টন
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9০-৯]*"
-                  value={form.tons}
-                  onChange={(event) => handleNumberInput('tons', event.target.value)}
-                  placeholder="টন"
-                  aria-label="টন"
-                />
-              </label>
-              <span className="formula-symbol" aria-hidden="true">×</span>
-              <label>
-                গুণ
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9০-৯]*"
-                  value={form.feetPerTon}
-                  onChange={(event) => handleNumberInput('feetPerTon', event.target.value)}
-                  placeholder="গুণ"
-                  aria-label="গুণ"
-                />
-              </label>
+            <div className={`formula-card ${feetMode === 'tons' ? 'active' : ''}`}>
+              <div className="formula-group">
+                <label>
+                  টন
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9০-৯]*"
+                    value={form.tons}
+                    onChange={(event) => handleNumberInput('tons', event.target.value)}
+                    placeholder="টন"
+                    aria-label="টন"
+                  />
+                </label>
+                <span className="formula-symbol" aria-hidden="true">×</span>
+                <label>
+                  গুণ
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9০-৯]*"
+                    value={form.feetPerTon}
+                    onChange={(event) => handleNumberInput('feetPerTon', event.target.value)}
+                    placeholder="গুণ"
+                    aria-label="গুণ"
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="formula-group">
+            <div className={`formula-card ${feetMode === 'measurement' ? 'active' : ''}`}>
+              <div className="formula-group measurement-formula">
+                <label>
+                  দৈর্ঘ্য
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9০-৯.]*"
+                    value={form.length}
+                    onChange={(event) => handleNumberInput('length', event.target.value)}
+                    placeholder="দৈর্ঘ্য"
+                    aria-label="গাড়ির দৈর্ঘ্য"
+                  />
+                </label>
+                <span className="formula-symbol small" aria-hidden="true">×</span>
+                <label>
+                  প্রস্থ
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9০-৯.]*"
+                    value={form.width}
+                    onChange={(event) => handleNumberInput('width', event.target.value)}
+                    placeholder="প্রস্থ"
+                    aria-label="গাড়ির প্রস্থ"
+                  />
+                </label>
+                <span className="formula-symbol small" aria-hidden="true">×</span>
+                <label>
+                  উচ্চতা
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9০-৯.]*"
+                    value={form.height}
+                    onChange={(event) => handleNumberInput('height', event.target.value)}
+                    placeholder="উচ্চতা"
+                    aria-label="গাড়ির উচ্চতা"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="inline-row full-width-row amount-line">
+            <div className="formula-group amount-formula">
               <label>
                 ফুট
                 <input
@@ -1418,6 +1968,19 @@ export default function ProjectDashboardPage() {
                   onChange={(event) => handleNumberInput('rate', event.target.value)}
                   placeholder="দর"
                   aria-label="দর"
+                />
+              </label>
+              <span className="formula-symbol" aria-hidden="true">=</span>
+              <label>
+                টাকা
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9০-৯]*"
+                  value={form.amount}
+                  readOnly
+                  aria-label="গণনা করা টাকা"
+                  className="amount-input"
                 />
               </label>
             </div>
@@ -1470,19 +2033,7 @@ export default function ProjectDashboardPage() {
             </label>
           </div>
 
-          <div className="inline-row">
-            <label>
-              টাকা
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9০-৯]*"
-                value={form.amount}
-                readOnly
-                aria-label="গণনা করা টাকা"
-              />
-            </label>
-
+          <div className="inline-row challan-only-row">
             <label>
               চালান নং (অটোমেটিক)
               <input
