@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,18 +31,30 @@ const getAmountSizeClass = (rawValue) => {
   return '';
 };
 
+// দশমিক হলে ২ ঘর, নইলে পূর্ণসংখ্যা
+const fmtCalc = (n) => {
+  if (!isFinite(n) || n === 0) return '0';
+  const fixed = parseFloat(n.toFixed(2));
+  return String(fixed);
+};
+
 const getInitialForm = () => ({
   date: new Date().toISOString().split('T')[0],
   business: '',
   customer: '',
   vehicle: '',
   description: '',
+  driverName: '',
+  driverMobile: '',
+  destination: '',
   length: '',
   width: '',
   height: '',
   feet: '0',
   rate: '',
   amount: '',
+  truckRatePerFoot: '',
+  truckCharge: '0',
   depositedTotal: '0',
   depositedBase: '0',
   deposited: '0',
@@ -51,8 +63,8 @@ const getInitialForm = () => ({
   remainingBase: '0',
   dueBase: '0',
   totalAmountBase: '0',
-  tons: '0',
-  feetPerTon: '0',
+  tons: '',
+  feetPerTon: '',
   challanNo: 'লোড হচ্ছে...',
 });
 
@@ -406,7 +418,7 @@ export default function ProjectDashboardPage() {
         const width = Number(toEnglishNumber(nextForm.width)) || 0;
         const height = Number(toEnglishNumber(nextForm.height)) || 0;
         if (length > 0 && width > 0 && height > 0) {
-          nextForm.feet = String(length * width * height);
+          nextForm.feet = fmtCalc(length * width * height);
         }
       }
 
@@ -417,7 +429,7 @@ export default function ProjectDashboardPage() {
         const tons = Number(toEnglishNumber(nextForm.tons)) || 0;
         const feetPerTon = Number(toEnglishNumber(nextForm.feetPerTon)) || 0;
         if (tons > 0 && feetPerTon > 0) {
-          nextForm.feet = String(tons * feetPerTon);
+          nextForm.feet = fmtCalc(tons * feetPerTon);
         }
       }
 
@@ -428,7 +440,18 @@ export default function ProjectDashboardPage() {
       ) {
         const feet = Number(toEnglishNumber(nextForm.feet)) || 0;
         const rate = Number(toEnglishNumber(nextForm.rate)) || 0;
-        nextForm.amount = String(feet * rate);
+        nextForm.amount = fmtCalc(feet * rate);
+      }
+
+      // গাড়ি ভাড়া: feet × truckRatePerFoot
+      if (
+        fieldName === 'truckRatePerFoot' ||
+        (feetMode === 'tons' && (fieldName === 'tons' || fieldName === 'feetPerTon')) ||
+        (feetMode === 'measurement' && (fieldName === 'length' || fieldName === 'width' || fieldName === 'height'))
+      ) {
+        const feet = Number(toEnglishNumber(nextForm.feet)) || 0;
+        const truckRate = Number(toEnglishNumber(nextForm.truckRatePerFoot)) || 0;
+        nextForm.truckCharge = fmtCalc(feet * truckRate);
       }
 
       if (
@@ -462,18 +485,20 @@ export default function ProjectDashboardPage() {
         const width = Number(toEnglishNumber(nextForm.width)) || 0;
         const height = Number(toEnglishNumber(nextForm.height)) || 0;
         if (length > 0 && width > 0 && height > 0) {
-          nextForm.feet = String(length * width * height);
+          nextForm.feet = fmtCalc(length * width * height);
         }
       } else {
         const tons = Number(toEnglishNumber(nextForm.tons)) || 0;
         const feetPerTon = Number(toEnglishNumber(nextForm.feetPerTon)) || 0;
         if (tons > 0 && feetPerTon > 0) {
-          nextForm.feet = String(tons * feetPerTon);
+          nextForm.feet = fmtCalc(tons * feetPerTon);
         }
       }
       const feet = Number(toEnglishNumber(nextForm.feet)) || 0;
       const rate = Number(toEnglishNumber(nextForm.rate)) || 0;
-      nextForm.amount = String(feet * rate);
+      nextForm.amount = fmtCalc(feet * rate);
+      const truckRate = Number(toEnglishNumber(nextForm.truckRatePerFoot)) || 0;
+      nextForm.truckCharge = fmtCalc(feet * truckRate);
       const deposited = Number(toEnglishNumber(nextForm.deposited)) || 0;
       const amount = Number(toEnglishNumber(nextForm.amount)) || 0;
       const remainingBase = Number(toEnglishNumber(nextForm.remainingBase)) || 0;
@@ -488,10 +513,13 @@ export default function ProjectDashboardPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const business = form.business.trim();
-    const customer = form.customer.trim();
-    const vehicle = form.vehicle.trim();
-    const description = form.description.trim();
+    const business = (form.business || '').trim();
+    const customer = (form.customer || '').trim();
+    const vehicle = (form.vehicle || '').trim();
+    const description = (form.description || '').trim();
+    const driverName = (form.driverName || '').trim();
+    const driverMobile = (form.driverMobile || '').trim();
+    const destination = (form.destination || '').trim();
     const length = Number(toEnglishNumber(form.length)) || 0;
     const width = Number(toEnglishNumber(form.width)) || 0;
     const height = Number(toEnglishNumber(form.height)) || 0;
@@ -505,11 +533,12 @@ export default function ProjectDashboardPage() {
     }
     const rate = Number(toEnglishNumber(form.rate)) || 0;
     const amount = feet * rate;
+    const truckRatePerFoot = Number(toEnglishNumber(form.truckRatePerFoot)) || 0;
     const deposited = Number(toEnglishNumber(form.deposited)) || 0;
     const remainingBase = Number(toEnglishNumber(form.remainingBase)) || 0;
     const dueBase = Number(toEnglishNumber(form.dueBase)) || 0;
     const { remaining, due } = recalcBalance(remainingBase, dueBase, amount, deposited);
-    const challanNo = form.challanNo.trim();
+    const challanNo = (form.challanNo || '').trim();
 
     if (GOOGLE_SHEET_WEB_APP_URL === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
       setError('Google Sheet Web App URL কনফিগার করুন। .env.local-এ NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL সেট করুন।');
@@ -615,7 +644,16 @@ export default function ProjectDashboardPage() {
       const currentChallanNum = parseInt(actualChallanNo, 10) || DEFAULT_INITIAL_CHALLAN;
       const nextChallanNum = currentChallanNum + 1;
 
-      setLastSlip({ ...payload, challanNo: actualChallanNo });
+      setLastSlip({
+        ...payload,
+        challanNo: actualChallanNo,
+        vehicle,
+        driverName,
+        driverMobile,
+        destination,
+        truckRatePerFoot,
+        truckCharge: feet * truckRatePerFoot,
+      });
       setStatus(`বিক্রয় হিসাব (চালান নং: ${actualChallanNo}) Google Sheet-এ সফলভাবে যোগ হয়েছে।`);
       setError('');
       setForm({
@@ -785,528 +823,429 @@ export default function ProjectDashboardPage() {
     const address = lastSlip.address || '';
     const vehicle = lastSlip.vehicle || '—';
     const description = lastSlip.description || '—';
-    const length = Number(lastSlip.length || 0).toLocaleString('en-BD');
-    const width = Number(lastSlip.width || 0).toLocaleString('en-BD');
-    const height = Number(lastSlip.height || 0).toLocaleString('en-BD');
-    const tons = Number(lastSlip.tons || 0).toLocaleString('en-BD');
-    const feetPerTon = Number(lastSlip.feetPerTon || 0).toLocaleString('en-BD');
-    const feet = Number(lastSlip.feet || 0).toLocaleString('en-BD');
-    const rate = '৳ ' + Number(lastSlip.rate || 0).toLocaleString('en-BD');
-    const amount = '৳ ' + Number(lastSlip.amount || 0).toLocaleString('en-BD');
-    const deposited = '৳ ' + Number(lastSlip.deposited || 0).toLocaleString('en-BD');
-    const remaining = '৳ ' + Number(lastSlip.remaining || 0).toLocaleString('en-BD');
-    const due = '৳ ' + Number(lastSlip.due || 0).toLocaleString('en-BD');
+    const driverName = lastSlip.driverName || '';
+    const driverMobile = lastSlip.driverMobile || '';
+    const destination = lastSlip.destination || '';
+    const truckCharge = lastSlip.truckCharge ? '৳ ' + Number(lastSlip.truckCharge).toLocaleString('bn-BD') : '';
+    const length = Number(lastSlip.length || 0).toLocaleString('bn-BD');
+    const width = Number(lastSlip.width || 0).toLocaleString('bn-BD');
+    const height = Number(lastSlip.height || 0).toLocaleString('bn-BD');
+    const tons = Number(lastSlip.tons || 0).toLocaleString('bn-BD');
+    const feetPerTon = Number(lastSlip.feetPerTon || 0).toLocaleString('bn-BD');
+    const feet = Number(lastSlip.feet || 0).toLocaleString('bn-BD');
+    const rate = '৳ ' + Number(lastSlip.rate || 0).toLocaleString('bn-BD');
+    const amount = '৳ ' + Number(lastSlip.amount || 0).toLocaleString('bn-BD');
+    const deposited = '৳ ' + Number(lastSlip.deposited || 0).toLocaleString('bn-BD');
+    const remaining = '৳ ' + Number(lastSlip.remaining || 0).toLocaleString('bn-BD');
+    const due = '৳ ' + Number(lastSlip.due || 0).toLocaleString('bn-BD');
     const challanNo = lastSlip.challanNo || '—';
-    const totalAmount = '৳ ' + Number(lastSlip.amount || 0).toLocaleString('en-BD');
+    const totalAmount = '৳ ' + Number(lastSlip.amount || 0).toLocaleString('bn-BD');
 
-    const buildSlip = (copyLabel) => `
+    // feetMode নির্ধারণ: lastSlip.feetMode থেকে
+    const slipFeetMode = lastSlip.feetMode || 'tons';
+
+    const buildSlip = () => `
       <div class="slip">
-        <div class="slip-inner">
-          <div class="business-header">
-            <div class="header-top-row">
-              <div class="mst-logo">MST</div>
-              <div class="titles">
-                <h1 class="bn-company">মেসার্স সাইফুল ট্রেডার্স এন্ড স্টোন ক্রাশার</h1>
-                <h2 class="en-company">M/S SAIFUL TRADERS &amp; STONE CRUSHER</h2>
-              </div>
-              <div class="copy-tag">${copyLabel}</div>
-            </div>
+
+        <!-- হেডার -->
+        <div class="slip-header">
+          <div class="header-left">
+            <div class="mst-logo">MST</div>
+          </div>
+          <div class="header-center">
+            <h1 class="bn-company">মেসার্স সাইফুল ট্রেডার্স এন্ড স্টোন ক্রাশার</h1>
+            <h2 class="en-company">M/S SAIFUL TRADERS &amp; STONE CRUSHER</h2>
             <p class="tagline">সাদা এলসি, কালো এলসি, কয়লা সহ সর্বপ্রকার ভাঙ্গা পাথর ও বালুর নির্ভরযোগ্য প্রতিষ্ঠান</p>
-            <div class="contact-pill">
+            <div class="contact-bar">
               <span>প্রোঃ জাকির হোসেন মোয়াজী</span>
-              <span class="divider"></span>
+              <span class="sep">|</span>
               <span>মোবা: 01711-662074, 01834-863675</span>
             </div>
           </div>
-
-          <div class="office-bars">
-            <div class="office-bar">হেড অফিস: তামাবিল, গোয়াইনঘাট, সিলেট।</div>
-            <div class="office-bar">শাখা অফিস: সুতারকান্দি, সিলেট।</div>
-          </div>
-
-          <div class="divider-line"></div>
-
-          <table class="data-table info-table">
-            <tbody>
-              <tr>
-                <th>তারিখ</th>
-                <td>${date}</td>
-              </tr>
-              <tr>
-                <th>চালান নং</th>
-                <td class="strong">${challanNo}</td>
-              </tr>
-              <tr>
-                <th>গ্রাহকের নাম</th>
-                <td class="strong">${customer}</td>
-              </tr>
-              <tr>
-                <th>গাড়ি</th>
-                <td>${vehicle}</td>
-              </tr>
-              ${mobile ? `
-              <tr>
-                <th>মোবাইল</th>
-                <td>${mobile}</td>
-              </tr>` : ''}
-              ${address ? `
-              <tr>
-                <th>ঠিকানা</th>
-                <td>${address}</td>
-              </tr>` : ''}
-            </tbody>
-          </table>
-
-          <div class="spacer-row"></div>
-
-          <table class="data-table calc-table">
-            <tbody>
-              <tr>
-                <th>টন</th>
-                <td>${tons}</td>
-                <th>ফুট</th>
-                <td>${feet}</td>
-              </tr>
-              <tr>
-                <th>গুণ</th>
-                <td>${feetPerTon}</td>
-                <th>দর (ফুট প্রতি)</th>
-                <td>${rate}</td>
-              </tr>
-              <tr>
-                <th>দৈর্ঘ্য</th>
-                <td>${length}</td>
-                <th>প্রস্থ</th>
-                <td>${width}</td>
-              </tr>
-              <tr>
-                <th>উচ্চতা</th>
-                <td>${height}</td>
-                <th>মোট ফুট (CFT)</th>
-                <td><strong>${feet}</strong></td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="spacer-row"></div>
-
-          <table class="data-table payment-table">
-            <tbody>
-              <tr>
-                <th>মোট টাকা</th>
-                <td class="strong highlight">${amount}</td>
-              </tr>
-              <tr>
-                <th>জমা</th>
-                <td>${deposited}</td>
-              </tr>
-              <tr>
-                <th>অবশিষ্ট</th>
-                <td class="strong remain">${remaining}</td>
-              </tr>
-              <tr>
-                <th>পাওনা</th>
-                <td class="strong due">${due}</td>
-              </tr>
-              <tr>
-                <th>বিবরণ</th>
-                <td>${description}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="footer-block">
-            <div class="sig-row">
-              <div class="sig-col">
-                <span class="sig-line"></span>
-                <span class="sig-label">ড্রাইভারের স্বাক্ষর</span>
-              </div>
-              <div class="sig-col">
-                <span class="sig-line"></span>
-                <span class="sig-label">ক্রেতার স্বাক্ষর</span>
-              </div>
-              <div class="sig-col right">
-                <span class="sig-line"></span>
-                <span class="sig-label small">পক্ষে: মেসার্স সাইফুল ট্রেডার্স এন্ড স্টোন ক্রাশার</span>
-              </div>
-            </div>
-
-            <div class="footer-banner">
-              <span class="banner-left">সততা ব্যবসার মূলধন</span>
-              <span class="banner-right">ধন্যবাদ আবার আসবেন</span>
+          <div class="header-right">
+            <div class="challan-box">
+              <span class="challan-label">চালান নং</span>
+              <span class="challan-no">${challanNo}</span>
             </div>
           </div>
         </div>
+
+        <!-- অফিস বার -->
+        <div class="office-bars">
+          <div class="office-bar">হেড অফিস: তামাবিল, গোয়াইনঘাট, সিলেট।</div>
+          <div class="office-bar">শাখা অফিস: সুতারকান্দি, সিলেট।</div>
+        </div>
+
+        <div class="divider-line"></div>
+
+        <!-- মূল তথ্য টেবিল -->
+        <table class="info-table">
+          <tbody>
+
+            <!-- লাইন ১: তারিখ | চালান নং -->
+            <tr>
+              <th>তারিখ</th>
+              <td>${date}</td>
+              <th>চালান নং</th>
+              <td class="bold blue">${challanNo}</td>
+            </tr>
+
+            <!-- লাইন ২: গ্রাহকের নাম | ঠিকানা -->
+            <tr>
+              <th>গ্রাহকের নাম</th>
+              <td class="bold">${customer}</td>
+              <th>ঠিকানা</th>
+              <td>${address || '—'}</td>
+            </tr>
+
+            <!-- লাইন ৩: ড্রাইভার | মোবাইল -->
+            <tr>
+              <th>ড্রাইভারের নাম</th>
+              <td>${driverName || '—'}</td>
+              <th>ড্রাইভারের মোবাইল</th>
+              <td>${driverMobile || '—'}</td>
+            </tr>
+
+            <!-- লাইন ৪: গাড়ি নাং | গন্তব্য -->
+            <tr>
+              <th>গাড়ি নাং</th>
+              <td class="bold">${vehicle}</td>
+              <th>গন্তব্য স্থান</th>
+              <td>${destination || '—'}</td>
+            </tr>
+
+            <!-- লাইন ৫: মালের বিবরণ -->
+            <tr>
+              <th>মালের বিবরণ</th>
+              <td colspan="3">${description || '—'}</td>
+            </tr>
+
+            <!-- লাইন ৬: মালের পরিমাণ (measurement বা টন মোড) -->
+            ${slipFeetMode === 'measurement' ? `
+            <tr>
+              <th>মালের পরিমাণ</th>
+              <td colspan="3">
+                <span class="formula-row">
+                  <span class="fl">দৈর্ঘ্য</span><span class="fv">${length}</span>
+                  <span class="fsym">×</span>
+                  <span class="fl">প্রস্থ</span><span class="fv">${width}</span>
+                  <span class="fsym">×</span>
+                  <span class="fl">উচ্চতা</span><span class="fv">${height}</span>
+                  <span class="fsym">=</span>
+                  <span class="fl">মোট CFT</span><span class="fv bold blue">${feet}</span>
+                </span>
+              </td>
+            </tr>` : `
+            <tr>
+              <th>মালের পরিমাণ</th>
+              <td colspan="3">
+                <span class="formula-row">
+                  <span class="fl">টন</span><span class="fv">${tons}</span>
+                  <span class="fsym">×</span>
+                  <span class="fl">গুণ</span><span class="fv">${feetPerTon}</span>
+                  <span class="fsym">=</span>
+                  <span class="fl">মোট CFT</span><span class="fv bold blue">${feet}</span>
+                </span>
+              </td>
+            </tr>`}
+
+            <!-- লাইন ৭: মোট টাকা -->
+            <tr class="amount-row">
+              <th>মোট টাকা</th>
+              <td colspan="3">
+                <span class="formula-row">
+                  <span class="fl">CFT</span><span class="fv">${feet}</span>
+                  <span class="fsym">×</span>
+                  <span class="fl">দর</span><span class="fv">${rate}</span>
+                  <span class="fsym">=</span>
+                  <span class="big-amount">${amount}</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- লাইন ৮: গাড়ি ভাড়া -->
+            <tr class="truck-row">
+              <th>গাড়ি ভাড়া</th>
+              <td colspan="3">
+                <span class="formula-row">
+                  <span class="fl">ফুট</span><span class="fv">${feet}</span>
+                  <span class="fsym">×</span>
+                  <span class="fl">ভাড়া/ফুট</span><span class="fv">${lastSlip.truckRatePerFoot ? '৳ ' + Number(lastSlip.truckRatePerFoot).toLocaleString('bn-BD') : '—'}</span>
+                  <span class="fsym">=</span>
+                  <span class="truck-total">${truckCharge || '—'}</span>
+                </span>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+
+        <!-- স্বাক্ষর -->
+        <div class="sig-row">
+          <div class="sig-col">
+            <span class="sig-line"></span>
+            <span class="sig-label">ড্রাইভারের স্বাক্ষর</span>
+          </div>
+          <div class="sig-col">
+            <span class="sig-line"></span>
+            <span class="sig-label">ক্রেতার স্বাক্ষর</span>
+          </div>
+          <div class="sig-col">
+            <span class="sig-line"></span>
+            <span class="sig-label">পক্ষে: মেসার্স সাইফুল ট্রেডার্স</span>
+          </div>
+        </div>
+
+        <!-- খালি জায়গা -->
+        <div class="spacer"></div>
+
+        <!-- footer banner একদম নিচে -->
+        <div class="footer-banner">
+          <span>সততা ব্যবসার মূলধন</span>
+          <span>ধন্যবাদ আবার আসবেন</span>
+        </div>
+
       </div>
     `;
 
     const slipHtml = `
       <html>
         <head>
-          <title>Saiful Traders Sales Slip — চালান নং ${challanNo}</title>
+          <meta charset="UTF-8" />
+          <title>Saiful Traders — চালান নং ${challanNo}</title>
           <style>
-            * { box-sizing: border-box; }
+            @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
+            * { box-sizing: border-box; margin: 0; padding: 0; }
             html, body {
-              margin: 0;
-              padding: 0;
               font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
               color: #111827;
-              background: #eef2f7;
+              background: #e5e7eb;
             }
-
             .page {
-              width: 297mm;
-              height: 210mm;
-              padding: 5mm;
+              width: 210mm;
+              min-height: 297mm;
               margin: 10px auto;
               background: #fff;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.12);
               display: flex;
-              flex-direction: row;
-              gap: 5mm;
-              box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+              flex-direction: column;
             }
 
             .slip {
               flex: 1;
-              background: #ffffff;
-              border: 1px solid #cdd5e1;
-              border-radius: 6px;
-              overflow: hidden;
-              display: flex;
-            }
-            .slip-inner {
-              width: 100%;
-              padding: 10px 14px 10px;
-              display: flex;
-              flex-direction: column;
-              gap: 6px;
-            }
-
-            .business-header {
-              text-align: center;
-              color: #1e3a8a;
-              position: relative;
-            }
-            .header-top-row {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 10px;
-              margin-bottom: 2px;
-            }
-            .titles { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; }
-            .mst-logo {
-              width: 42px;
-              height: 42px;
-              border: 2.5px solid #1e3a8a;
-              border-radius: 50%;
-              display: grid;
-              place-items: center;
-              font-family: 'Georgia', serif;
-              font-weight: 700;
-              font-size: 14px;
-              letter-spacing: 0.5px;
-              color: #1e3a8a;
-              background: #fff;
-              flex-shrink: 0;
-              position: relative;
-            }
-            .mst-logo::after {
-              content: '';
-              position: absolute;
-              bottom: 5px; left: 6px; right: 6px;
-              height: 3px;
-              border-top: 1.5px solid #1e3a8a;
-              border-bottom: 1.5px solid #1e3a8a;
-              opacity: 0.6;
-            }
-            .copy-tag {
-              min-width: 70px;
-              padding: 3px 8px;
-              border: 1.5px solid #1e3a8a;
-              border-radius: 999px;
-              color: #1e3a8a;
-              font-weight: 700;
-              font-size: 10px;
-              letter-spacing: 0.3px;
-              background: #eff6ff;
-              flex-shrink: 0;
-              text-align: center;
-            }
-            .bn-company {
-              font-size: 18px;
-              font-weight: 800;
-              line-height: 1.15;
-              color: #1e3a8a;
-              margin: 0;
-            }
-            .en-company {
-              font-family: 'Georgia', serif;
-              font-size: 15px;
-              font-weight: 700;
-              letter-spacing: 0.5px;
-              color: #1e3a8a;
-              margin: 0;
-              line-height: 1.15;
-            }
-            .tagline {
-              font-size: 10.5px;
-              font-weight: 500;
-              color: #1f2937;
-              margin: 2px 0 4px;
-              line-height: 1.35;
-            }
-            .contact-pill {
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              flex-wrap: wrap;
-              gap: 4px 10px;
-              background: #1e3a8a;
-              color: #ffffff;
-              padding: 4px 14px;
-              border-radius: 999px;
-              font-weight: 700;
-              font-size: 10.5px;
-            }
-            .contact-pill .divider {
-              width: 1px; height: 12px; background: rgba(255,255,255,0.25);
-            }
-
-            .office-bars {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 6px;
-            }
-            .office-bar {
-              background: #1e3a8a;
-              color: #ffffff;
-              padding: 5px 10px;
-              font-weight: 600;
-              font-size: 10.5px;
-              border-radius: 4px;
-              text-align: center;
-              line-height: 1.25;
-            }
-
-            .divider-line {
-              height: 2px;
-              background: linear-gradient(90deg, transparent, #1e3a8a 20%, #1e3a8a 80%, transparent);
-              opacity: 0.55;
-            }
-
-            .spacer-row {
-              height: 8px;
-            }
-
-            .data-table {
-              width: 100%;
-              border-collapse: collapse;
-              font-size: 12px;
-              table-layout: fixed;
-            }
-            .data-table th, .data-table td {
-              border: 1px solid #c9d3e3;
-              padding: 7px 10px;
-              vertical-align: middle;
-              word-wrap: break-word;
-              line-height: 1.45;
-            }
-            .data-table th {
-              background: #eef4ff;
-              color: #1e3a8a;
-              font-weight: 700;
-              text-align: left;
-              width: 32%;
-              padding-right: 10px;
-            }
-            .data-table td {
-              color: #111827;
-              width: 68%;
-            }
-            .data-table .strong { font-weight: 700; color: #111827; }
-            .data-table .highlight { color: #1e3a8a; font-weight: 800; }
-            .data-table .remain { color: #047857; }
-            .data-table .due { color: #b91c1c; }
-
-            /* ── Info / Calc / Payment tables: common look ── */
-            .data-table.info-table,
-            .data-table.calc-table,
-            .data-table.payment-table {
-              border: 1.5px solid #94a3b8;
-              border-radius: 8px;
-              overflow: hidden;
-              box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
-            }
-            .data-table.info-table th,
-            .data-table.calc-table th,
-            .data-table.payment-table th {
-              font-size: 11.5px;
-              letter-spacing: 0.2px;
-            }
-            .data-table.info-table td,
-            .data-table.calc-table td,
-            .data-table.payment-table td {
-              font-size: 12.5px;
-              background: #ffffff;
-            }
-            /* zebra stripe (light alt) */
-            .data-table.info-table tr:nth-child(even) td,
-            .data-table.calc-table tr:nth-child(even) td,
-            .data-table.payment-table tr:nth-child(even) td {
-              background: #fafbff;
-            }
-            .data-table.info-table tr:nth-child(even) th,
-            .data-table.calc-table tr:nth-child(even) th,
-            .data-table.payment-table tr:nth-child(even) th {
-              background: #e8efff;
-            }
-
-            /* ── Calc table: 4 equal columns (25% each) 2 rows — PLAIN style ── */
-            .data-table.calc-table th,
-            .data-table.calc-table td {
-              width: 25%;
-            }
-            .data-table.calc-table th {
-              background: #eef4ff;
-              color: #1e3a8a;
-              font-weight: 700;
-              text-align: left;
-              border: 1px solid #c9d3e3;
-              padding: 7px 10px;
-            }
-            .data-table.calc-table td {
-              color: #111827;
-              background: #ffffff;
-              border: 1px solid #c9d3e3;
-              border-top: none;
-              padding: 7px 10px;
-            }
-            .data-table.calc-table tr:nth-child(even) td {
-              background: #fafbff;
-            }
-            .data-table.calc-table tr:nth-child(even) th {
-              background: #e8efff;
-            }
-
-            .footer-block {
-              margin-top: auto;
+              padding: 10mm 12mm 8mm;
               display: flex;
               flex-direction: column;
               gap: 8px;
-              padding-top: 2px;
+              min-height: 297mm;
             }
 
-            .sig-row {
+            /* হেডার */
+            .slip-header {
               display: flex;
-              justify-content: space-between;
-              align-items: flex-end;
-              gap: 12px;
-              padding: 2px 0 0;
-              width: 100%;
+              align-items: flex-start;
+              gap: 10px;
+              padding-bottom: 5px;
             }
-            .sig-col {
+            .header-left { flex-shrink: 0; padding-top: 4px; }
+            .header-center { flex: 1; text-align: center; }
+            .header-right {
+              flex-shrink: 0;
               display: flex;
               flex-direction: column;
-              align-items: center;
-              gap: 5px;
-              flex: 1;
-              min-width: 0;
-            }
-            .sig-col:first-child {
-              align-items: flex-start;
-            }
-            .sig-col.right {
               align-items: flex-end;
+              gap: 6px;
             }
-            .sig-line {
-              width: 100%;
-              border-top: 1.25px dashed #6b7280;
-              height: 1px;
-              flex-shrink: 0;
+            .mst-logo {
+              width: 58px; height: 58px;
+              border: 3px solid #1e3a8a;
+              border-radius: 50%;
+              display: grid; place-items: center;
+              font-family: 'Georgia', serif;
+              font-weight: 700; font-size: 16px;
+              color: #1e3a8a;
             }
-            .sig-label {
-              font-size: 10.5px;
-              color: #374151;
-              font-weight: 600;
-              line-height: 1.35;
+            .bn-company {
+              font-size: 32px; font-weight: 800;
+              color: #1e3a8a; line-height: 1.25;
+              font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
+              letter-spacing: 0.3px;
+              text-shadow: 0 1px 2px rgba(30,58,138,0.12);
+            }
+            .en-company {
+              font-family: 'Manrope', 'Arial', sans-serif;
+              font-size: 15px; font-weight: 700;
+              color: #1e3a8a; letter-spacing: 2.5px;
+              text-transform: uppercase;
+              margin-top: 3px;
+            }
+            .tagline {
+              font-size: 12px; color: #374151;
+              margin: 4px 0 5px;
+              font-family: 'Hind Siliguri', sans-serif;
+            }
+            .contact-bar {
+              display: inline-flex; align-items: center; gap: 8px;
+              background: #1e3a8a; color: #fff;
+              padding: 4px 16px; border-radius: 999px;
+              font-size: 12px; font-weight: 600;
+              font-family: 'Manrope', 'Hind Siliguri', sans-serif;
+            }
+            .tagline {
+              font-size: 10px; color: #374151;
+              margin: 3px 0 4px;
+            }
+            .contact-bar {
+              display: inline-flex; align-items: center; gap: 8px;
+              background: #1e3a8a; color: #fff;
+              padding: 3px 14px; border-radius: 999px;
+              font-size: 10.5px; font-weight: 600;
+            }
+            .contact-bar .sep { opacity: 0.35; }
+            .copy-tag {
+              padding: 3px 12px;
+              border: 1.5px solid #1e3a8a;
+              border-radius: 999px;
+              color: #1e3a8a; font-weight: 700;
+              font-size: 10px; background: #eff6ff;
+            }
+            .challan-box {
+              border: 2px solid #1e3a8a;
+              border-radius: 6px;
+              padding: 5px 16px;
+              text-align: center;
+              background: #eff6ff;
+            }
+            .challan-label {
+              display: block; font-size: 10px;
+              color: #6b7280; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.5px;
+            }
+            .challan-no {
+              display: block; font-size: 22px;
+              font-weight: 800; color: #1e3a8a;
+            }
+
+            /* অফিস বার */
+            .office-bars {
+              display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+            }
+            .office-bar {
+              background: #1e3a8a; color: #fff;
+              padding: 4px 10px; font-size: 10px;
+              font-weight: 600; border-radius: 4px;
               text-align: center;
             }
-            .sig-col:first-child .sig-label { text-align: left; }
-            .sig-col.right .sig-label { text-align: right; }
-            .sig-label.small {
-              font-size: 9.5px;
-              text-align: right;
-              line-height: 1.25;
-              max-width: none;
+            .divider-line {
+              height: 2px;
+              background: linear-gradient(90deg, transparent, #1e3a8a 20%, #1e3a8a 80%, transparent);
+              opacity: 0.45; margin: 1px 0;
             }
 
-            .footer-banner {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              background: #1e3a8a;
-              color: #ffffff;
-              padding: 7px 18px;
+            /* মূল টেবিল */
+            .info-table {
+              width: 100%;
+              flex: 1;
+              border-collapse: collapse;
+              border: 1.5px solid #94a3b8;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            .info-table th,
+            .info-table td {
+              padding: 13px 15px;
+              font-size: 15px;
+              line-height: 1.5;
+              border: 1px solid #d1d5db;
+              vertical-align: middle;
+              font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
+            }
+            .info-table th {
+              background: #eef4ff;
+              color: #1e3a8a;
               font-weight: 700;
-              font-size: 12px;
-              border-radius: 5px;
-              gap: 12px;
-              box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
-            }
-            .banner-left {
-              flex: 1;
               text-align: left;
+              white-space: nowrap;
+              width: 18%;
             }
-            .banner-right {
-              flex: 1;
-              text-align: right;
-              position: relative;
+            .info-table td { background: #fff; }
+            .info-table tr:nth-child(even) th { background: #e8efff; }
+            .info-table tr:nth-child(even) td { background: #fafbff; }
+
+            /* amount & truck rows */
+            .info-table tr.amount-row th { background: #dbeafe; color: #1e40af; }
+            .info-table tr.amount-row td { background: #eff6ff; }
+            .info-table tr.truck-row  th { background: #d1fae5; color: #065f46; }
+            .info-table tr.truck-row  td { background: #f0fdf4; }
+
+            /* helper classes */
+            .bold  { font-weight: 700; }
+            .blue  { color: #1e3a8a; }
+            .green { color: #047857; }
+            .red   { color: #b91c1c; }
+
+            /* formula row */
+            .formula-row {
+              display: flex; align-items: center;
+              gap: 8px; flex-wrap: wrap;
             }
-            .banner-left::after {
-              content: '';
-              position: absolute;
-              top: 0;
-              bottom: 0;
-              left: 50%;
-              width: 1px;
-              background: rgba(255,255,255,0.25);
-              display: none;
+            .fl  { font-size: 12px; color: #6b7280; font-weight: 600; font-family: 'Manrope', sans-serif; }
+            .fv  { font-size: 15px; font-weight: 700; color: #111827; font-family: 'Manrope', sans-serif; }
+            .fv.bold { font-weight: 800; }
+            .fv.blue { color: #1e3a8a; }
+            .fsym { font-size: 15px; color: #9ca3af; font-weight: 600; font-family: 'Manrope', sans-serif; }
+            .big-amount {
+              font-size: 22px; font-weight: 800; color: #1e3a8a;
+              font-family: 'Manrope', sans-serif;
+            }
+            .truck-total {
+              font-size: 20px; font-weight: 800; color: #065f46;
+              font-family: 'Manrope', sans-serif;
             }
 
-            @media screen {
-              .slip + .slip {
-                page-break-before: auto;
-              }
+            /* স্বাক্ষর */
+            .sig-row {
+              display: flex; justify-content: space-between;
+              align-items: flex-end; gap: 20px;
+              padding-top: 55px;
             }
+            .sig-col {
+              flex: 1; display: flex;
+              flex-direction: column; align-items: center; gap: 5px;
+            }
+            .sig-line {
+              width: 100%; border-top: 1px dashed #9ca3af;
+            }
+            .sig-label {
+              font-size: 13px; color: #374151;
+              font-weight: 600; text-align: center;
+              font-family: 'Hind Siliguri', sans-serif;
+            }
+
+            /* খালি spacer */
+            .spacer { flex: 1; min-height: 45mm; }
+
+            /* footer banner */
+            .footer-banner {
+              display: flex; justify-content: space-between;
+              background: #1e3a8a; color: #fff;
+              padding: 9px 20px; border-radius: 5px;
+              font-size: 14px; font-weight: 700;
+              font-family: 'Hind Siliguri', 'Manrope', sans-serif;
+            }
+
             @media print {
-              @page {
-                size: A4 landscape;
-                margin: 0;
-              }
-              html, body {
-                background: #fff;
-                margin: 0;
-                padding: 0;
-              }
-              .page {
-                margin: 0;
-                box-shadow: none;
-                padding: 6mm;
-                width: 297mm;
-                height: 210mm;
-                page-break-after: always;
-              }
-              .page:last-child {
-                page-break-after: auto;
-              }
+              @page { size: A4 portrait; margin: 0; }
+              html, body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+              .page { margin: 0; box-shadow: none; width: 210mm; min-height: 297mm; }
+              .slip { min-height: 297mm; }
+              * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
             }
           </style>
         </head>
         <body>
           <div class="page">
-            ${buildSlip('অফিস কপি')}
-            ${buildSlip('গ্রাহকের কপি')}
+            ${buildSlip()}
           </div>
         </body>
       </html>
@@ -1315,7 +1254,7 @@ export default function ProjectDashboardPage() {
     printWindow.document.write(slipHtml);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
+    setTimeout(() => printWindow.print(), 800);
   };
 
   if (!isLoggedIn) {
@@ -1819,24 +1758,15 @@ export default function ProjectDashboardPage() {
             </label>
           </div>
 
-          <div className="inline-row">
-            <label>
-              গাড়ি
-              <input
-                type="text"
-                value={form.vehicle}
-                onChange={(event) => setForm({ ...form, vehicle: event.target.value })}
-                placeholder="যেমন: রাজভোগ ১০"
-              />
-            </label>
-
-            <label>
-              বিবরণ
+          <div className="inline-row description-full-row">
+            <label className="description-label-full">
+              মালের বিবরণ
               <input
                 type="text"
                 value={form.description}
                 onChange={(event) => setForm({ ...form, description: event.target.value })}
                 placeholder="যেমন: বালু, নুড়ি, ইট"
+                className="description-input-full"
               />
             </label>
           </div>
@@ -1986,6 +1916,93 @@ export default function ProjectDashboardPage() {
             </div>
           </div>
 
+          <div className="truck-info-section">
+            <div className="truck-info-header">
+              <span className="truck-info-title">🚛 গাড়ি ও ড্রাইভার তথ্য</span>
+              <span className="truck-info-note">( শুধু স্লিপে দেখাবে, শিটে যাবে না )</span>
+            </div>
+
+            <div className="inline-row">
+              <label>
+                গাড়ি নাম্বার
+                <input
+                  type="text"
+                  value={form.vehicle}
+                  onChange={(event) => setForm({ ...form, vehicle: event.target.value })}
+                  placeholder="যেমন: রাজভোগ ১০"
+                />
+              </label>
+
+              <label>
+                ড্রাইভারের নাম
+                <input
+                  type="text"
+                  value={form.driverName}
+                  onChange={(event) => setForm({ ...form, driverName: event.target.value })}
+                  placeholder="যেমন: রহিম উদ্দিন"
+                />
+              </label>
+
+              <label>
+                ড্রাইভারের মোবাইল
+                <input
+                  type="tel"
+                  value={form.driverMobile}
+                  onChange={(event) => setForm({ ...form, driverMobile: event.target.value })}
+                  placeholder="যেমন: ০১৭XXXXXXXX"
+                />
+              </label>
+
+              <label>
+                গন্তব্য স্থান
+                <input
+                  type="text"
+                  value={form.destination}
+                  onChange={(event) => setForm({ ...form, destination: event.target.value })}
+                  placeholder="যেমন: সিলেট সদর"
+                />
+              </label>
+            </div>
+
+            <div className="inline-row full-width-row amount-line">
+              <div className="formula-group amount-formula">
+                <label>
+                  ফুট
+                  <input
+                    type="text"
+                    value={form.feet}
+                    readOnly
+                    aria-label="ফুট (রেফারেন্স)"
+                  />
+                </label>
+                <span className="formula-symbol" aria-hidden="true">×</span>
+                <label>
+                  প্রতি ফুট ভাড়া
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9০-৯]*"
+                    value={form.truckRatePerFoot}
+                    onChange={(event) => handleNumberInput('truckRatePerFoot', event.target.value)}
+                    placeholder="প্রতি ফুট ভাড়া"
+                    aria-label="প্রতি ফুট গাড়ি ভাড়া"
+                  />
+                </label>
+                <span className="formula-symbol" aria-hidden="true">=</span>
+                <label>
+                  মোট গাড়ি ভাড়া
+                  <input
+                    type="text"
+                    value={form.truckCharge}
+                    readOnly
+                    aria-label="মোট গাড়ি ভাড়া"
+                    className="amount-input truck-charge-result"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
           <div className="inline-row">
             <label>
               মোট জমা
@@ -2051,7 +2068,7 @@ export default function ProjectDashboardPage() {
 
           {lastSlip ? (
             <button type="button" className="secondary-btn full-width-btn" onClick={handleDownloadSlip}>
-              PDF স্লিপ ডাউনলোড
+              চালান ডাউনলোড করুন
             </button>
           ) : null}
 
