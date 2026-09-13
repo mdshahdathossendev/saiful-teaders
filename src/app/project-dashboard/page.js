@@ -3,8 +3,8 @@
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const DEFAULT_USERNAME = 'সাইফুল';
-const DEFAULT_PASSWORD = 'সাইফুল১২৩';
+const DEFAULT_USERNAME = '123';
+const DEFAULT_PASSWORD = '123';
 const GOOGLE_SHEET_WEB_APP_URL =
   process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL ||
   'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
@@ -817,7 +817,9 @@ export default function ProjectDashboardPage() {
       return;
     }
 
-    const date = lastSlip.date;
+    const date = lastSlip.date
+      ? lastSlip.date.split('-').reverse().join('-')
+      : '—';
     const customer = lastSlip.customer;
     const mobile = lastSlip.mobile || '';
     const address = lastSlip.address || '';
@@ -857,7 +859,7 @@ export default function ProjectDashboardPage() {
             <h2 class="en-company">M/S SAIFUL TRADERS &amp; STONE CRUSHER</h2>
             <p class="tagline">সাদা এলসি, কালো এলসি, কয়লা সহ সর্বপ্রকার ভাঙ্গা পাথর ও বালুর নির্ভরযোগ্য প্রতিষ্ঠান</p>
             <div class="contact-bar">
-              <span>প্রোঃ জাকির হোসেন মোয়াজী</span>
+              <span>প্রোঃ জাকির হোসেন মেয়াজী</span>
               <span class="sep">|</span>
               <span>মোবা: 01711-662074, 01834-863675</span>
             </div>
@@ -866,6 +868,7 @@ export default function ProjectDashboardPage() {
             <div class="challan-box">
               <span class="challan-label">চালান নং</span>
               <span class="challan-no">${challanNo}</span>
+              <span class="challan-date">${date}</span>
             </div>
           </div>
         </div>
@@ -882,20 +885,16 @@ export default function ProjectDashboardPage() {
         <table class="info-table">
           <tbody>
 
-            <!-- লাইন ১: তারিখ | চালান নং -->
-            <tr>
-              <th>তারিখ</th>
-              <td>${date}</td>
-              <th>চালান নং</th>
-              <td class="bold blue">${challanNo}</td>
-            </tr>
-
-            <!-- লাইন ২: গ্রাহকের নাম | ঠিকানা -->
+            <!-- লাইন ১: গ্রাহকের নাম -->
             <tr>
               <th>গ্রাহকের নাম</th>
-              <td class="bold">${customer}</td>
+              <td colspan="3" class="bold">${customer}</td>
+            </tr>
+
+            <!-- লাইন ২: ঠিকানা -->
+            <tr>
               <th>ঠিকানা</th>
-              <td>${address || '—'}</td>
+              <td colspan="3">${address || '—'}</td>
             </tr>
 
             <!-- লাইন ৩: ড্রাইভার | মোবাইল -->
@@ -1033,7 +1032,7 @@ export default function ProjectDashboardPage() {
 
             .slip {
               flex: 1;
-              padding: 10mm 12mm 8mm;
+              padding: 8mm 10mm 8mm;
               display: flex;
               flex-direction: column;
               gap: 8px;
@@ -1048,7 +1047,7 @@ export default function ProjectDashboardPage() {
               padding-bottom: 5px;
             }
             .header-left { flex-shrink: 0; padding-top: 4px; }
-            .header-center { flex: 1; text-align: center; }
+            .header-center { flex: 1; text-align: center; min-width: 0; overflow: visible; }
             .header-right {
               flex-shrink: 0;
               display: flex;
@@ -1057,73 +1056,65 @@ export default function ProjectDashboardPage() {
               gap: 6px;
             }
             .mst-logo {
-              width: 58px; height: 58px;
-              border: 3px solid #1e3a8a;
+              width: 70px; height: 70px;
+              border: 3px solid #000;
               border-radius: 50%;
               display: grid; place-items: center;
               font-family: 'Georgia', serif;
-              font-weight: 700; font-size: 16px;
-              color: #1e3a8a;
+              font-weight: 700; font-size: 20px;
+              color: #000;
             }
             .bn-company {
-              font-size: 32px; font-weight: 800;
-              color: #1e3a8a; line-height: 1.25;
+              font-size: 28px; font-weight: 800;
+              color: #000; line-height: 1.2;
               font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
-              letter-spacing: 0.3px;
-              text-shadow: 0 1px 2px rgba(30,58,138,0.12);
+              white-space: nowrap;
+              margin: 0 0 2px 0;
             }
             .en-company {
               font-family: 'Manrope', 'Arial', sans-serif;
-              font-size: 15px; font-weight: 700;
-              color: #1e3a8a; letter-spacing: 2.5px;
+              font-size: 22px; font-weight: 800;
+              color: #000; letter-spacing: 1.5px;
               text-transform: uppercase;
-              margin-top: 3px;
+              white-space: nowrap;
+              margin: 0;
             }
             .tagline {
-              font-size: 12px; color: #374151;
+              font-size: 13.5px; color: #000;
               margin: 4px 0 5px;
               font-family: 'Hind Siliguri', sans-serif;
+              white-space: nowrap;
+              letter-spacing: -0.3px;
             }
             .contact-bar {
               display: inline-flex; align-items: center; gap: 8px;
-              background: #1e3a8a; color: #fff;
-              padding: 4px 16px; border-radius: 999px;
-              font-size: 12px; font-weight: 600;
+              background: #000; color: #fff;
+              padding: 6px 18px; border-radius: 999px;
+              font-size: 15px; font-weight: 600;
               font-family: 'Manrope', 'Hind Siliguri', sans-serif;
             }
-            .tagline {
-              font-size: 10px; color: #374151;
-              margin: 3px 0 4px;
-            }
-            .contact-bar {
-              display: inline-flex; align-items: center; gap: 8px;
-              background: #1e3a8a; color: #fff;
-              padding: 3px 14px; border-radius: 999px;
-              font-size: 10.5px; font-weight: 600;
-            }
-            .contact-bar .sep { opacity: 0.35; }
-            .copy-tag {
-              padding: 3px 12px;
-              border: 1.5px solid #1e3a8a;
-              border-radius: 999px;
-              color: #1e3a8a; font-weight: 700;
-              font-size: 10px; background: #eff6ff;
-            }
+            .contact-bar .sep { opacity: 0.4; }
             .challan-box {
-              border: 2px solid #1e3a8a;
+              border: 3px solid #000;
               border-radius: 6px;
               padding: 5px 16px;
               text-align: center;
-              background: #eff6ff;
+              background: #fff;
             }
             .challan-label {
-              display: block; font-size: 10px;
-              color: #6b7280; font-weight: 600;
+              display: block; font-size: 13px;
+              color: #000; font-weight: 700;
               text-transform: uppercase; letter-spacing: 0.5px;
             }
             .challan-no {
-              display: block; font-size: 22px;
-              font-weight: 800; color: #1e3a8a;
+              display: block; font-size: 28px;
+              font-weight: 800; color: #000;
+            }
+            .challan-date {
+              display: block; font-size: 13px;
+              font-weight: 600; color: #000;
+              margin-top: 3px;
+              font-family: 'Manrope', sans-serif;
             }
 
             /* অফিস বার */
@@ -1131,15 +1122,15 @@ export default function ProjectDashboardPage() {
               display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
             }
             .office-bar {
-              background: #1e3a8a; color: #fff;
-              padding: 4px 10px; font-size: 10px;
+              background: #000; color: #fff;
+              padding: 6px 10px; font-size: 15px;
               font-weight: 600; border-radius: 4px;
               text-align: center;
             }
             .divider-line {
-              height: 2px;
-              background: linear-gradient(90deg, transparent, #1e3a8a 20%, #1e3a8a 80%, transparent);
-              opacity: 0.45; margin: 1px 0;
+              height: 3px;
+              background: #000;
+              margin: 2px 0;
             }
 
             /* মূল টেবিল */
@@ -1147,59 +1138,57 @@ export default function ProjectDashboardPage() {
               width: 100%;
               flex: 1;
               border-collapse: collapse;
-              border: 1.5px solid #94a3b8;
-              border-radius: 8px;
-              overflow: hidden;
+              border: 3px solid #000;
             }
             .info-table th,
             .info-table td {
-              padding: 13px 15px;
-              font-size: 15px;
+              padding: 14px 16px;
+              font-size: 17px;
               line-height: 1.5;
-              border: 1px solid #d1d5db;
+              border: 2px solid #000;
               vertical-align: middle;
               font-family: 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif;
+              color: #000;
+              background: #fff;
             }
             .info-table th {
-              background: #eef4ff;
-              color: #1e3a8a;
-              font-weight: 700;
+              background: #f0f0f0;
+              font-weight: 800;
               text-align: left;
               white-space: nowrap;
-              width: 18%;
+              width: 20%;
             }
-            .info-table td { background: #fff; }
-            .info-table tr:nth-child(even) th { background: #e8efff; }
-            .info-table tr:nth-child(even) td { background: #fafbff; }
+            .info-table tr:nth-child(even) th { background: #e0e0e0; }
+            .info-table tr:nth-child(even) td { background: #fafafa; }
 
             /* amount & truck rows */
-            .info-table tr.amount-row th { background: #dbeafe; color: #1e40af; }
-            .info-table tr.amount-row td { background: #eff6ff; }
-            .info-table tr.truck-row  th { background: #d1fae5; color: #065f46; }
-            .info-table tr.truck-row  td { background: #f0fdf4; }
+            .info-table tr.amount-row th { background: #d0d0d0; font-size: 18px; }
+            .info-table tr.amount-row td { background: #f5f5f5; }
+            .info-table tr.truck-row  th { background: #d0d0d0; }
+            .info-table tr.truck-row  td { background: #fafafa; }
 
             /* helper classes */
-            .bold  { font-weight: 700; }
-            .blue  { color: #1e3a8a; }
-            .green { color: #047857; }
-            .red   { color: #b91c1c; }
+            .bold  { font-weight: 800; }
+            .blue  { color: #000; }
+            .green { color: #000; }
+            .red   { color: #000; }
 
             /* formula row */
             .formula-row {
               display: flex; align-items: center;
               gap: 8px; flex-wrap: wrap;
             }
-            .fl  { font-size: 12px; color: #6b7280; font-weight: 600; font-family: 'Manrope', sans-serif; }
-            .fv  { font-size: 15px; font-weight: 700; color: #111827; font-family: 'Manrope', sans-serif; }
+            .fl  { font-size: 13px; color: #444; font-weight: 700; font-family: 'Manrope', sans-serif; }
+            .fv  { font-size: 17px; font-weight: 700; color: #000; font-family: 'Manrope', sans-serif; }
             .fv.bold { font-weight: 800; }
-            .fv.blue { color: #1e3a8a; }
-            .fsym { font-size: 15px; color: #9ca3af; font-weight: 600; font-family: 'Manrope', sans-serif; }
+            .fv.blue { color: #000; }
+            .fsym { font-size: 22px; color: #000; font-weight: 700; font-family: 'Manrope', sans-serif; }
             .big-amount {
-              font-size: 22px; font-weight: 800; color: #1e3a8a;
+              font-size: 24px; font-weight: 800; color: #000;
               font-family: 'Manrope', sans-serif;
             }
             .truck-total {
-              font-size: 20px; font-weight: 800; color: #065f46;
+              font-size: 22px; font-weight: 800; color: #000;
               font-family: 'Manrope', sans-serif;
             }
 
@@ -1214,11 +1203,11 @@ export default function ProjectDashboardPage() {
               flex-direction: column; align-items: center; gap: 5px;
             }
             .sig-line {
-              width: 100%; border-top: 1px dashed #9ca3af;
+              width: 100%; border-top: 2px solid #000;
             }
             .sig-label {
-              font-size: 13px; color: #374151;
-              font-weight: 600; text-align: center;
+              font-size: 14px; color: #000;
+              font-weight: 700; text-align: center;
               font-family: 'Hind Siliguri', sans-serif;
             }
 
@@ -1228,9 +1217,9 @@ export default function ProjectDashboardPage() {
             /* footer banner */
             .footer-banner {
               display: flex; justify-content: space-between;
-              background: #1e3a8a; color: #fff;
-              padding: 9px 20px; border-radius: 5px;
-              font-size: 14px; font-weight: 700;
+              background: #000; color: #fff;
+              padding: 10px 20px; border-radius: 5px;
+              font-size: 15px; font-weight: 700;
               font-family: 'Hind Siliguri', 'Manrope', sans-serif;
             }
 
@@ -2067,8 +2056,14 @@ export default function ProjectDashboardPage() {
           {status ? <p className="success-text">{status}</p> : null}
 
           {lastSlip ? (
-            <button type="button" className="secondary-btn full-width-btn" onClick={handleDownloadSlip}>
-              চালান ডাউনলোড করুন
+            <button
+              type="button"
+              className="challan-download-btn"
+              onClick={() => { handleDownloadSlip(); setLastSlip(null); }}
+            >
+              <span className="download-icon">📄</span>
+              <span>চালান ডাউনলোড করুন</span>
+              <span className="download-arrow">↓</span>
             </button>
           ) : null}
 
