@@ -1429,7 +1429,7 @@ export default function ProjectDashboardPage() {
         <div className="global-summary-header">
           <div className="gsh-left">
             <span className="gsh-eyebrow">FINANCIAL OVERVIEW</span>
-            <h2 className="gsh-title">সংগঠনের মোট সারাংশ</h2>
+            <h2 className="gsh-title">ব্যবসায়িক হিসাব</h2>
           </div>
           <div className="gsh-right">
             <span className="gsh-pill">
