@@ -2764,3 +2764,148 @@ img {
   animation: checkPop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both, checkRing 1.5s ease 0.5s infinite;
   border-radius: 50%;
 }
+
+/* ── জমা দিন বাটন ── */
+.deposit-only-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.52rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(5, 150, 105, 0.25);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.deposit-only-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(5, 150, 105, 0.35);
+}
+
+.deposit-only-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── জমা confirm বাটন ── */
+.deposit-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.72rem 1.4rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.25);
+}
+
+.deposit-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(5, 150, 105, 0.35);
+}
+
+.deposit-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── জমা সফল মডাল ── */
+@keyframes depositSuccessIn {
+  0%   { opacity: 0; transform: scale(0.85) translateY(20px); }
+  70%  { transform: scale(1.03) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes amountCount {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.deposit-success-panel {
+  width: min(360px, calc(100% - 32px));
+  background: #ffffff;
+  border-radius: 2rem;
+  box-shadow: 0 32px 72px rgba(15, 23, 42, 0.22);
+  animation: depositSuccessIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+}
+
+.deposit-success-ring {
+  animation: checkPop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.deposit-success-svg {
+  width: 90px;
+  height: 90px;
+  display: block;
+  border-radius: 50%;
+  animation: checkRing 1.8s ease 0.5s infinite;
+}
+
+.deposit-success-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #15803d;
+  animation: fadeUp 0.4s ease 0.2s both;
+}
+
+.deposit-success-amount {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: #15803d;
+  font-family: 'Manrope', sans-serif;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  animation: amountCount 0.4s ease 0.3s both;
+  background: linear-gradient(135deg, #15803d, #4ade80);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.deposit-success-sub {
+  margin: 0;
+  font-size: 1rem;
+  color: #6b7280;
+  animation: fadeUp 0.4s ease 0.35s both;
+}
+
+.deposit-success-ok {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.9rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.3);
+  animation: fadeUp 0.4s ease 0.4s both;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-family: 'Hind Siliguri', sans-serif;
+}
+
+.deposit-success-ok:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(22, 163, 74, 0.4);
+}

@@ -98,6 +98,10 @@ export default function ProjectDashboardPage() {
   const [lastSlip, setLastSlip] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSlipModal, setShowSlipModal] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositSuccessAmount, setDepositSuccessAmount] = useState(0);
+  const [showDepositSuccess, setShowDepositSuccess] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', mobile: '', address: '' });
   const customerSummaryRequest = useRef(0);
   const [globalSummary, setGlobalSummary] = useState({
@@ -806,6 +810,57 @@ export default function ProjectDashboardPage() {
     } catch (e) {}
 
     queueMicrotask(() => refreshAllNow(false));
+  };
+
+  const handleDepositOnly = async () => {
+    const customer = (form.customer || '').trim();
+    const deposited = Number(toEnglishNumber(depositAmount)) || 0;
+
+    if (!customer) {
+      setError('গ্রাহকের নাম নির্বাচন করুন।');
+      return;
+    }
+    if (deposited <= 0) {
+      setError('সঠিক পরিমাণ দিন।');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+    setStatus('');
+
+    const currentCustomerObj = customerOptions.find(
+      (c) => c.name.toLowerCase() === customer.toLowerCase()
+    );
+    const mobile = currentCustomerObj?.mobile || '';
+    const address = currentCustomerObj?.address || '';
+
+    try {
+      const res = await fetch('/api/sales-submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'depositOnly',
+          date: form.date,
+          customer,
+          sheetName: customer,
+          mobile,
+          address,
+          deposited,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+      setDepositAmount('');
+      setShowDepositModal(false);
+      setDepositSuccessAmount(deposited);
+      setShowDepositSuccess(true);
+      await refreshAllNow(false);
+    } catch (err) {
+      setError(`জমা দেওয়া সম্ভব হয়নি। ${err?.message || ''}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDownloadSlip = () => {
@@ -1594,6 +1649,17 @@ export default function ProjectDashboardPage() {
               <span className="minus-icon">−</span>
               <span>গ্রাহক বাতিল</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => { setDepositAmount(''); setShowDepositModal(true); }}
+              className="deposit-only-btn"
+              title="শুধু জমা দিন"
+              disabled={!form.customer}
+            >
+              <span aria-hidden="true">💰</span>
+              <span>জমা দিন</span>
+            </button>
           </div>
         </div>
 
@@ -2137,6 +2203,78 @@ export default function ProjectDashboardPage() {
                 যোগ করুন
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDepositModal ? (
+        <div className="modal-overlay" onClick={() => setShowDepositModal(false)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>💰 জমা দিন</h3>
+              <button type="button" className="modal-close-btn" onClick={() => setShowDepositModal(false)} aria-label="বন্ধ করুন">✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: '0 0 0.5rem', fontWeight: 600, color: '#374151' }}>
+                গ্রাহক: <strong>{form.customer || '—'}</strong>
+              </p>
+              <label className="modal-label">
+                জমার পরিমাণ (টাকা) <span className="required-mark">*</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value.replace(/[^\d.০-৯]/g, ''))}
+                  placeholder="যেমন: ৫০০০"
+                  autoFocus
+                />
+              </label>
+              {error ? <p className="error-text">{error}</p> : null}
+              {status ? <p className="success-text">{status}</p> : null}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="secondary-btn modal-cancel-btn" onClick={() => { setShowDepositModal(false); setError(''); setStatus(''); }}>
+                বাতিল
+              </button>
+              <button
+                type="button"
+                className="deposit-confirm-btn"
+                disabled={isSubmitting || !depositAmount || !form.customer}
+                onClick={handleDepositOnly}
+              >
+                {isSubmitting ? (
+                  <><span className="submit-spinner" /> জমা হচ্ছে...</>
+                ) : 'জমা দিন'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDepositSuccess ? (
+        <div className="modal-overlay" onClick={() => setShowDepositSuccess(false)}>
+          <div className="deposit-success-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="deposit-success-ring">
+              <svg viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" className="deposit-success-svg">
+                <circle cx="36" cy="36" r="36" fill="#dcfce7"/>
+                <circle cx="36" cy="36" r="27" fill="#16a34a"/>
+                <polyline points="22,36 31,45 50,26" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="deposit-success-title">জমা সফল হয়েছে!</h3>
+            <div className="deposit-success-amount">
+              ৳ {depositSuccessAmount.toLocaleString('bn-BD')}
+            </div>
+            <p className="deposit-success-sub">
+              <strong>{form.customer}</strong>{'-এর হিসাবে জমা যোগ হয়েছে'}
+            </p>
+            <button
+              type="button"
+              className="deposit-success-ok"
+              onClick={() => setShowDepositSuccess(false)}
+            >
+              ঠিক আছে
+            </button>
           </div>
         </div>
       ) : null}

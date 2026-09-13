@@ -781,7 +781,43 @@ function doPost(e) {
       });
     }
 
-    const sheetName = String(payload.sheetName || payload.customer || '').trim();
+    if (payload.action === 'depositOnly') {
+      const sheetName = String(payload.sheetName || payload.customer || '').trim();
+      if (!sheetName) return jsonResponse({ ok: false, message: 'Missing sheetName' });
+
+      let sheet = spreadsheet.getSheetByName(sheetName);
+      if (!sheet) return jsonResponse({ ok: false, message: 'Sheet not found: ' + sheetName });
+
+      ensureCustomerTitleHeader(sheet, sheetName, payload.address || '', payload.mobile || '');
+      removeTotalsRow(sheet);
+      sheet.getRange(3, 1, 1, HEADERS.length).setValues([HEADERS]);
+
+      sheet.appendRow([
+        payload.date || '',
+        payload.customer || '',
+        '',   // গাড়ি
+        '',   // দৈর্ঘ্য
+        '',   // প্রস্থ
+        '',   // উচ্চতা
+        '',   // গাড়ির পরিমাপ
+        'জমা',// বিবরণ
+        0,    // টন
+        0,    // গুণ
+        0,    // ফুট
+        0,    // দর
+        0,    // টাকা
+        Number(payload.deposited || 0), // জমা
+        0,    // অবশিষ্ট
+        0,    // পাওনা
+        '',   // চালান নং
+      ]);
+      applyCalculatedRow(sheet, sheet.getLastRow());
+      addTotalsRow(sheet, sheetName, payload.address || '', payload.mobile || '');
+
+      return jsonResponse({ ok: true, message: 'Deposit added', sheetName });
+    }
+
+
 
     if (!sheetName) {
       return jsonResponse({ ok: false, message: 'Missing sheetName/customer' });
