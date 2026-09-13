@@ -3,8 +3,8 @@
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const DEFAULT_USERNAME = '123';
-const DEFAULT_PASSWORD = '123';
+const DEFAULT_USERNAME = '01711662074';
+const DEFAULT_PASSWORD = '662074';
 const GOOGLE_SHEET_WEB_APP_URL =
   process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL ||
   'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
