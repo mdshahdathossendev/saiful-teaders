@@ -97,6 +97,7 @@ export default function ProjectDashboardPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [lastSlip, setLastSlip] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSlipModal, setShowSlipModal] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', mobile: '', address: '' });
   const customerSummaryRequest = useRef(0);
   const [globalSummary, setGlobalSummary] = useState({
@@ -654,6 +655,7 @@ export default function ProjectDashboardPage() {
         truckRatePerFoot,
         truckCharge: feet * truckRatePerFoot,
       });
+      setShowSlipModal(true);
       setStatus(`বিক্রয় হিসাব (চালান নং: ${actualChallanNo}) Google Sheet-এ সফলভাবে যোগ হয়েছে।`);
       setError('');
       setForm({
@@ -1352,14 +1354,6 @@ export default function ProjectDashboardPage() {
             <span aria-hidden="true">{pollingEnabled ? '🔵' : '⚪'}</span>
             <span>{pollingEnabled ? 'অটো সিঙ্ক ON' : 'অটো সিঙ্ক OFF'}</span>
           </button>
-          <button type="button" onClick={handleAddCustomer} className="secondary-btn small-btn action-btn add-customer-btn" title="কাস্টমার যোগ করুন">
-            <span aria-hidden="true">＋</span>
-            <span>কাস্টমার যোগ করুন</span>
-          </button>
-          <button type="button" onClick={handleDeleteCustomer} className="secondary-btn small-btn action-btn delete-customer-btn" title="কাস্টমার ডিলেট করুন">
-            <span aria-hidden="true">−</span>
-            <span>কাস্টমার ডিলেট করুন</span>
-          </button>
           <button type="button" onClick={handleLogout} className="primary-btn small-btn action-btn" title="লগআউট">
             <span aria-hidden="true">⎋</span>
             <span>লগআউট</span>
@@ -2055,20 +2049,19 @@ export default function ProjectDashboardPage() {
           {error ? <p className="error-text">{error}</p> : null}
           {status ? <p className="success-text">{status}</p> : null}
 
-          {lastSlip ? (
-            <button
-              type="button"
-              className="challan-download-btn"
-              onClick={() => { handleDownloadSlip(); setLastSlip(null); }}
-            >
-              <span className="download-icon">📄</span>
-              <span>চালান ডাউনলোড করুন</span>
-              <span className="download-arrow">↓</span>
-            </button>
-          ) : null}
-
-          <button type="submit" className="primary-btn full-width-btn" disabled={isSubmitting}>
-            {isSubmitting ? 'সেভ হচ্ছে...' : 'Google Sheet এ জমা দিন'}
+          <button type="submit" className="primary-btn full-width-btn submit-sheet-btn" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <span className="submit-spinner" aria-hidden="true" />
+                <span>সেভ হচ্ছে...</span>
+              </>
+            ) : (
+              <>
+                <span className="submit-icon" aria-hidden="true">☁️</span>
+                <span>Google Sheet এ জমা দিন</span>
+                <span className="submit-arrow" aria-hidden="true">→</span>
+              </>
+            )}
           </button>
         </form>
       </section>
@@ -2144,6 +2137,42 @@ export default function ProjectDashboardPage() {
                 যোগ করুন
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSlipModal ? (
+        <div className="modal-overlay" onClick={() => setShowSlipModal(false)}>
+          <div className="slip-modal-panel" onClick={(e) => e.stopPropagation()}>
+
+            <div className="slip-modal-icon">
+              <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="slip-modal-check-svg">
+                <circle cx="28" cy="28" r="28" fill="#dcfce7"/>
+                <circle cx="28" cy="28" r="21" fill="#16a34a"/>
+                <polyline points="17,28 24,35 39,20" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="slip-modal-title">ডাটা সফলভাবে যোগ হয়েছে!</h3>
+            <p className="slip-modal-sub">চালান নং: <strong>{lastSlip?.challanNo}</strong></p>
+
+            <button
+              type="button"
+              className="challan-download-btn"
+              onClick={() => { handleDownloadSlip(); setShowSlipModal(false); setLastSlip(null); }}
+            >
+              <span className="download-icon">📄</span>
+              <span>চালান ডাউনলোড করুন</span>
+              <span className="download-arrow">↓</span>
+            </button>
+
+            <button
+              type="button"
+              className="slip-modal-skip"
+              onClick={() => { setShowSlipModal(false); setLastSlip(null); }}
+            >
+              এখন নয়
+            </button>
+
           </div>
         </div>
       ) : null}
