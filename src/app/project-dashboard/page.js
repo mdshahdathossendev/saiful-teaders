@@ -97,6 +97,9 @@ export default function ProjectDashboardPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [lastSlip, setLastSlip] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAddSuccessModal, setShowAddSuccessModal] = useState(false);
+  const [addedCustomerName, setAddedCustomerName] = useState('');
   const [showSlipModal, setShowSlipModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
@@ -774,6 +777,8 @@ export default function ProjectDashboardPage() {
     }));
 
     setShowAddModal(false);
+    setAddedCustomerName(trimmedName);
+    setShowAddSuccessModal(true);
 
     try {
       await fetch('/api/customers', {
@@ -789,9 +794,13 @@ export default function ProjectDashboardPage() {
   const handleDeleteCustomer = async () => {
     const currentCustomer = form.customer.trim();
     if (!currentCustomer) return;
+    setShowDeleteModal(true);
+  };
 
-    const confirmed = window.confirm(`⚠️  WARNING\n\n"${currentCustomer}" নামটি মুছে ফেললে ঐ গ্রাহকের সম্পূর্ণ হিসাব শিটসহ (সকল চালান, জমা-খরচের হিসাব) স্থায়ীভাবে মুছে যাবে।\n\nএখনও মুছে ফেলবেন?`);
-    if (!confirmed) return;
+  const handleConfirmDeleteCustomer = async () => {
+    const currentCustomer = form.customer.trim();
+    if (!currentCustomer) return;
+    setShowDeleteModal(false);
 
     setCustomerOptions((prev) => {
       const nextOptions = prev.filter(c => c.name.toLowerCase() !== currentCustomer.toLowerCase());
@@ -2134,75 +2143,108 @@ export default function ProjectDashboardPage() {
 
       {showAddModal ? (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>নতুন গ্রাহক যোগ করুন</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setShowAddModal(false)}
-                aria-label="বন্ধ করুন"
-              >
-                ✕
-              </button>
+          <div className="cust-modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="cust-modal-icon-wrap add-icon-wrap">
+              <span className="cust-modal-icon">👤</span>
             </div>
+            <h3 className="cust-modal-title">নতুন গ্রাহক যোগ করুন</h3>
+            <p className="cust-modal-sub">গ্রাহকের তথ্য দিয়ে একটি নতুন হিসাব শিট তৈরি হবে</p>
 
-            <div className="modal-body">
+            <div className="cust-modal-form">
               <label className="modal-label">
                 গ্রাহকের নাম <span className="required-mark">*</span>
                 <input
                   type="text"
                   value={newCustomerForm.name}
-                  onChange={(e) =>
-                    setNewCustomerForm({ ...newCustomerForm, name: e.target.value })
-                  }
+                  onChange={(e) => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
                   placeholder="গ্রাহকের নাম লিখুন"
                   autoFocus
                 />
               </label>
-
               <label className="modal-label">
                 মোবাইল নাম্বার
                 <input
                   type="tel"
                   value={newCustomerForm.mobile}
-                  onChange={(e) =>
-                    setNewCustomerForm({ ...newCustomerForm, mobile: e.target.value })
-                  }
+                  onChange={(e) => setNewCustomerForm({ ...newCustomerForm, mobile: e.target.value })}
                   placeholder="যেমন: ০১৭XXXXXXXX"
                 />
               </label>
-
               <label className="modal-label">
                 ঠিকানা
                 <input
                   type="text"
                   value={newCustomerForm.address}
-                  onChange={(e) =>
-                    setNewCustomerForm({ ...newCustomerForm, address: e.target.value })
-                  }
+                  onChange={(e) => setNewCustomerForm({ ...newCustomerForm, address: e.target.value })}
                   placeholder="গ্রাহকের ঠিকানা লিখুন"
                 />
               </label>
             </div>
 
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="secondary-btn modal-cancel-btn"
-                onClick={() => setShowAddModal(false)}
-              >
+            <div className="cust-modal-actions">
+              <button type="button" className="cust-cancel-btn" onClick={() => setShowAddModal(false)}>
                 বাতিল
               </button>
               <button
                 type="button"
-                className="primary-btn modal-confirm-btn"
+                className="cust-confirm-btn add-confirm-btn"
                 onClick={handleConfirmAddCustomer}
                 disabled={!newCustomerForm.name.trim()}
               >
-                যোগ করুন
+                <span>＋</span> যোগ করুন
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDeleteModal ? (
+        <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="cust-modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="cust-modal-icon-wrap delete-icon-wrap">
+              <span className="cust-modal-icon">🗑️</span>
+            </div>
+            <h3 className="cust-modal-title delete-title">গ্রাহক মুছে ফেলবেন?</h3>
+            <p className="cust-modal-sub">
+              <strong>&ldquo;{form.customer}&rdquo;</strong> নামের গ্রাহকের সম্পূর্ণ হিসাব শিট ও সকল চালান স্থায়ীভাবে মুছে যাবে।
+            </p>
+            <div className="delete-warning-box">
+              ⚠️ এই কাজটি আর ফিরিয়ে আনা যাবে না
+            </div>
+            <div className="cust-modal-actions">
+              <button type="button" className="cust-cancel-btn" onClick={() => setShowDeleteModal(false)}>
+                না, রাখুন
+              </button>
+              <button type="button" className="cust-confirm-btn delete-confirm-btn" onClick={handleConfirmDeleteCustomer}>
+                হ্যাঁ, মুছুন
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAddSuccessModal ? (
+        <div className="modal-overlay" onClick={() => setShowAddSuccessModal(false)}>
+          <div className="cust-modal-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="cust-modal-icon-wrap" style={{ background: '#f0fdf4', boxShadow: '0 0 0 8px rgba(22,163,74,0.1)' }}>
+              <svg viewBox="0 0 56 56" fill="none" width="40" height="40">
+                <circle cx="28" cy="28" r="28" fill="#dcfce7"/>
+                <circle cx="28" cy="28" r="21" fill="#16a34a"/>
+                <polyline points="17,28 24,35 39,20" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h3 className="cust-modal-title" style={{ color: '#15803d' }}>গ্রাহক যোগ হয়েছে!</h3>
+            <p className="cust-modal-sub">
+              <strong>&ldquo;{addedCustomerName}&rdquo;</strong> সফলভাবে গ্রাহক তালিকায় যোগ হয়েছে এবং Google Sheet-এ একটি নতুন হিসাব শিট তৈরি হয়েছে।
+            </p>
+            <button
+              type="button"
+              className="cust-confirm-btn add-confirm-btn"
+              style={{ width: '100%', marginTop: '0.5rem' }}
+              onClick={() => setShowAddSuccessModal(false)}
+            >
+              ঠিক আছে
+            </button>
           </div>
         </div>
       ) : null}
