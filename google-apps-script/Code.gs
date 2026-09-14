@@ -1,23 +1,21 @@
 const SPREADSHEET_ID = '1c7ZyUibkflrm-lOp_eVpmYEge1hriMZAGB93-G-CWCk';
 
+// গ্রাহকের নাম টপ রো-তে (row 1) থাকবে — data column-এ থাকবে না
+// দৈর্ঘ্য/প্রস্থ/উচ্চতা শিটে যাবে না — শুধু ফুট যাবে
 const HEADERS = [
-  'তারিখ',
-  'গ্রাহকের নাম',
-  'গাড়ি',
-  'দৈর্ঘ্য',
-  'প্রস্থ',
-  'উচ্চতা',
-  'গাড়ির পরিমাপ (ফুট)',
-  'বিবরণ',
-  'টন',
-  'গুণ',
-  'ফুট',
-  'দর',
-  'টাকা',
-  'জমা',
-  'অবশিষ্ট',
-  'পাওনা',
-  'চালান নং',
+  'তারিখ',              // A=1
+  'গাড়ি',               // B=2
+  'গাড়ির পরিমাপ (ফুট)', // C=3
+  'বিবরণ',              // D=4
+  'টন',                 // E=5
+  'গুণ',                // F=6
+  'ফুট',                // G=7
+  'দর',                 // H=8
+  'টাকা',               // I=9
+  'জমা',                // J=10
+  'অবশিষ্ট',           // K=11
+  'পাওনা',              // L=12
+  'চালান নং',          // M=13
 ];
 
 function normalizeText(value) {
@@ -57,71 +55,58 @@ function getHeaderRowIndex(sheet) {
 }
 
 /**
- * applyCalculatedRow — সকল হিসাবের ফর্মুলা একটি data row-এ বসায়।
- *
- * কলাম ম্যাপিং (1-indexed):
- *   D=4  দৈর্ঘ্য   E=5  প্রস্থ    F=6  উচ্চতা
- *   G=7  গাড়ির পরিমাপ (ফুট) = D×E×F  যদি D,E,F সবই >0
- *   H=8  বিবরণ
- *   I=9  টন        J=10 গুণ
- *   K=11 ফুট       = G যদি G>0, নাহলে I×J
- *   L=12 দর
- *   M=13 টাকা      = K×L
- *   N=14 জমা
- *   O=15 অবশিষ্ট   = MAX(cumulative জমা − cumulative টাকা, 0)
- *   P=16 পাওনা     = MAX(cumulative টাকা − cumulative জমা, 0)
- *   Q=17 চালান নং
+ * applyCalculatedRow — নতুন 13-column layout:
+ *   A=1  তারিখ
+ *   B=2  গাড়ি
+ *   C=3  গাড়ির পরিমাপ (ফুট)  — measurement mode-এ ফুট আসে, নইলে 0
+ *   D=4  বিবরণ
+ *   E=5  টন
+ *   F=6  গুণ
+ *   G=7  ফুট       = C যদি C>0, নাহলে E×F
+ *   H=8  দর
+ *   I=9  টাকা      = G×H
+ *   J=10 জমা
+ *   K=11 অবশিষ্ট   = MAX(cumulative জমা − cumulative টাকা, 0)
+ *   L=12 পাওনা     = MAX(cumulative টাকা − cumulative জমা, 0)
+ *   M=13 চালান নং
  */
 function applyCalculatedRow(sheet, row) {
   const headerRow = getHeaderRowIndex(sheet);
   const dataStartRow = headerRow + 1;
   if (row <= headerRow || row > sheet.getLastRow()) return;
 
-  // Normalize all numeric input cells — converts Bangla digits & strips commas.
-  // Always run this so manually typed Bangla digits (০-৯) work correctly.
   try {
-    // দৈর্ঘ্য (D), প্রস্থ (E), উচ্চতা (F)
-    const dimVals = sheet.getRange(row, 4, 1, 3).getValues()[0];
-    sheet.getRange(row, 4, 1, 3).setValues([[
-      toNumber(dimVals[0]),
-      toNumber(dimVals[1]),
-      toNumber(dimVals[2]),
-    ]]);
+    // গাড়ির পরিমাপ (C=3)
+    sheet.getRange(row, 3).setValue(toNumber(sheet.getRange(row, 3).getValue()));
 
-    // টন (I), গুণ (J)
-    const tonVals = sheet.getRange(row, 9, 1, 2).getValues()[0];
-    sheet.getRange(row, 9, 1, 2).setValues([[
+    // টন (E=5), গুণ (F=6)
+    const tonVals = sheet.getRange(row, 5, 1, 2).getValues()[0];
+    sheet.getRange(row, 5, 1, 2).setValues([[
       toNumber(tonVals[0]),
       toNumber(tonVals[1]),
     ]]);
 
-    // দর (L), জমা (N)
-    sheet.getRange(row, 12).setValue(toNumber(sheet.getRange(row, 12).getValue()));
-    sheet.getRange(row, 14).setValue(toNumber(sheet.getRange(row, 14).getValue()));
+    // দর (H=8), জমা (J=10)
+    sheet.getRange(row, 8).setValue(toNumber(sheet.getRange(row, 8).getValue()));
+    sheet.getRange(row, 10).setValue(toNumber(sheet.getRange(row, 10).getValue()));
   } catch (e) {}
 
-  // ── Col G (7): গাড়ির পরিমাপ (ফুট) = দৈর্ঘ্য × প্রস্থ × উচ্চতা
-  // Formula: যদি তিনটোই >0 তাহলে গুণফল, নাহলে 0
+  // ── Col G (7): ফুট = C যদি C>0, নাহলে E×F
   sheet.getRange(row, 7).setFormula(
-    `=IF(AND(D${row}>0,E${row}>0,F${row}>0),D${row}*E${row}*F${row},0)`
+    `=IF(C${row}>0,C${row},E${row}*F${row})`
   );
 
-  // ── Col K (11): ফুট = গাড়ির পরিমাপ (G) যদি G>0, নাহলে টন × গুণ (I×J)
+  // ── Col I (9): টাকা = G × H
+  sheet.getRange(row, 9).setFormula(`=G${row}*H${row}`);
+
+  // ── Col K (11): অবশিষ্ট
   sheet.getRange(row, 11).setFormula(
-    `=IF(G${row}>0,G${row},I${row}*J${row})`
+    `=MAX(SUM($J$${dataStartRow}:J${row})-SUM($I$${dataStartRow}:I${row}),0)`
   );
 
-  // ── Col M (13): টাকা = ফুট (K) × দর (L)
-  sheet.getRange(row, 13).setFormula(`=K${row}*L${row}`);
-
-  // ── Col O (15): অবশিষ্ট = MAX(ক্রমবর্ধমান জমা − ক্রমবর্ধমান টাকা, 0)
-  sheet.getRange(row, 15).setFormula(
-    `=MAX(SUM($N$${dataStartRow}:N${row})-SUM($M$${dataStartRow}:M${row}),0)`
-  );
-
-  // ── Col P (16): পাওনা = MAX(ক্রমবর্ধমান টাকা − ক্রমবর্ধমান জমা, 0)
-  sheet.getRange(row, 16).setFormula(
-    `=MAX(SUM($M$${dataStartRow}:M${row})-SUM($N$${dataStartRow}:N${row}),0)`
+  // ── Col L (12): পাওনা
+  sheet.getRange(row, 12).setFormula(
+    `=MAX(SUM($I$${dataStartRow}:I${row})-SUM($J$${dataStartRow}:J${row}),0)`
   );
 }
 
@@ -144,9 +129,7 @@ function rebuildTotalsRow(sheet, customerName, address, mobile) {
     if (!lock.tryLock(1500)) return;
     const cache = CacheService.getScriptCache();
     const cacheKey = 'rebuildTotals_' + sheet.getSheetId() + '_' + sheet.getLastRow();
-    if (cache.get(cacheKey)) {
-      return;
-    }
+    if (cache.get(cacheKey)) return;
     cache.put(cacheKey, '1', 3);
 
     removeTotalsRow(sheet);
@@ -254,7 +237,6 @@ function onEdit(e) {
 
     const headerRow = getHeaderRowIndex(sheet);
     const lastRow = sheet.getLastRow();
-
     const range = e.range;
     let editedInTitle = false;
 
@@ -267,7 +249,6 @@ function onEdit(e) {
       const totalsRow = findTotalsRow(sheet);
       const actualLast = totalsRow ? totalsRow - 1 : lastRow;
 
-      // Data row edited — recalculate all affected rows
       if (!(rEnd < dataStartRow || rStart > actualLast)) {
         for (let row = Math.max(rStart, dataStartRow); row <= Math.min(rEnd, actualLast); row++) {
           applyCalculatedRow(sheet, row);
@@ -291,10 +272,8 @@ function onEdit(e) {
       address = meta.split('📍 ঠিকানা:')[1].trim();
     }
 
-    const customerName = sheet.getName();
-    rebuildTotalsRow(sheet, customerName, address, mobile);
-  } catch (err) {
-  }
+    rebuildTotalsRow(sheet, sheet.getName(), address, mobile);
+  } catch (err) {}
 }
 
 function findTotalsRow(sheet) {
@@ -335,12 +314,10 @@ function onChange(e) {
     }
 
     rebuildTotalsRow(sheet, sheet.getName(), address, mobile);
-  } catch (err) {
-  }
+  } catch (err) {}
 }
 
-function onOpen() {
-}
+function onOpen() {}
 
 function ensureCustomersSheet(spreadsheet) {
   let sheet = spreadsheet.getSheetByName('Customers');
@@ -354,34 +331,23 @@ function ensureCustomersSheet(spreadsheet) {
   spreadsheet.getSheets().forEach(s => {
     const sName = s.getName();
     if (sName === 'Customers') return;
-
     const firstCell = String(s.getRange(1, 1).getValue() || '').trim();
     if (firstCell === '' || firstCell === 'তারিখ') return;
-
     const metaText = String(s.getRange(2, 1).getValue() || '');
     let mobile = '';
     let address = '';
-
     if (metaText.includes('📞 মোবাইল:')) {
       mobile = metaText.split('📞 মোবাইল:')[1].split('|')[0].trim();
     }
     if (metaText.includes('📍 ঠিকানা:')) {
       address = metaText.split('📍 ঠিকানা:')[1].trim();
     }
-
-    if (sName) {
-      existingCustomers.set(sName, { mobile, address });
-    }
+    if (sName) existingCustomers.set(sName, { mobile, address });
   });
 
   const rows = [];
-  existingCustomers.forEach((data, name) => {
-    rows.push([name, data.mobile, data.address]);
-  });
-
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 3).setValues(rows);
-  }
+  existingCustomers.forEach((data, name) => rows.push([name, data.mobile, data.address]));
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, 3).setValues(rows);
 
   return sheet;
 }
@@ -402,7 +368,6 @@ function ensureCustomerTitleHeader(sheet, customerName, address, mobile) {
 
   const lastCol = HEADERS.length;
   const nameText = customerName || sheet.getName();
-
   const phoneText = mobile ? `📞 মোবাইল: ${mobile}` : '';
   const addrText = address ? `📍 ঠিকানা: ${address}` : '';
   const metaText = [phoneText, addrText].filter(Boolean).join('   |   ') || 'কাস্টমার হিসাব শিট';
@@ -446,21 +411,28 @@ function styleSheet(sheet, customerName, address, mobile) {
   ensureCustomerTitleHeader(sheet, customerName, address, mobile);
 
   const headerRow = 3;
-  const lastColumn = HEADERS.length;
+  const lastColumn = HEADERS.length; // 13
   const lastRow = Math.max(sheet.getLastRow(), headerRow);
 
   sheet.setFrozenRows(headerRow);
   sheet.setHiddenGridlines(true);
+
+  // Header row styling
   sheet.getRange(headerRow, 1, 1, lastColumn)
     .setFontWeight('bold')
     .setFontColor('#ffffff')
     .setBackground('#1f4e78')
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
+
+  // তারিখ (A=1) — সবুজ
   sheet.getRange(headerRow, 1).setBackground('#0f766e');
+  // গাড়ি (B=2) — বাদামি
   sheet.getRange(headerRow, 2).setBackground('#b45309');
-  sheet.getRange(headerRow, 9, 1, 4).setBackground('#2563eb');
-  sheet.getRange(headerRow, 13, 1, 4).setBackground('#7c3aed');
+  // টন-ফুট (E=5 থেকে H=8) — নীল
+  sheet.getRange(headerRow, 5, 1, 4).setBackground('#2563eb');
+  // টাকা-পাওনা (I=9 থেকে L=12) — বেগুনি
+  sheet.getRange(headerRow, 9, 1, 4).setBackground('#7c3aed');
   sheet.setRowHeight(headerRow, 34);
 
   if (!sheet.getFilter()) {
@@ -474,13 +446,20 @@ function styleSheet(sheet, customerName, address, mobile) {
       .setFontColor('#1f2937')
       .setVerticalAlignment('middle')
       .setBorder(true, true, true, true, true, true, '#d9e2f3', SpreadsheetApp.BorderStyle.SOLID);
+
+    // তারিখ (A=1)
     sheet.getRange(headerRow + 1, 1, lastRow - headerRow, 1).setNumberFormat('yyyy-mm-dd');
-    sheet.getRange(headerRow + 1, 4, lastRow - headerRow, 4)
+
+    // গাড়ির পরিমাপ (C=3) — decimal
+    sheet.getRange(headerRow + 1, 3, lastRow - headerRow, 1)
       .setNumberFormat('#,##0.##')
       .setHorizontalAlignment('right');
-    sheet.getRange(headerRow + 1, 9, lastRow - headerRow, 8)
+
+    // টন থেকে পাওনা (E=5 থেকে L=12)
+    sheet.getRange(headerRow + 1, 5, lastRow - headerRow, 8)
       .setNumberFormat('#,##0.##')
       .setHorizontalAlignment('right');
+
     for (let row = headerRow + 1; row <= lastRow; row += 1) {
       if (row % 2 === 0) {
         sheet.getRange(row, 1, 1, lastColumn).setBackground('#f8fbff');
@@ -488,7 +467,10 @@ function styleSheet(sheet, customerName, address, mobile) {
     }
   }
 
-  const widths = [100, 160, 120, 80, 80, 80, 90, 180, 80, 80, 80, 90, 110, 110, 110, 110, 110];
+  // Column widths — 13-column layout
+  // A=তারিখ, B=গাড়ি, C=গাড়ির পরিমাপ, D=বিবরণ, E=টন, F=গুণ,
+  // G=ফুট, H=দর, I=টাকা, J=জমা, K=অবশিষ্ট, L=পাওনা, M=চালান নং
+  const widths = [100, 120, 110, 180, 80, 80, 80, 90, 110, 110, 110, 110, 110];
   widths.forEach((width, index) => sheet.setColumnWidth(index + 1, width));
   sheet.getRange(1, 1, lastRow, lastColumn).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 }
@@ -511,22 +493,27 @@ function addTotalsRow(sheet, customerName, address, mobile) {
   const headerRow = getHeaderRowIndex(sheet);
   const dataStartRow = headerRow + 1;
   const totalRow = sheet.getLastRow() + 1;
+
+  // 13 column
   sheet.getRange(totalRow, 1, 1, HEADERS.length).setValues([[
-    'মোট', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+    'মোট', '', '', '', '', '', '', '', '', '', '', '', '',
   ]]);
-  sheet.getRange(totalRow, 13, 1, 4).setFormulas([[
-    `=SUM(M${dataStartRow}:M${totalRow - 1})`,
-    `=SUM(N${dataStartRow}:N${totalRow - 1})`,
-    `=MAX(N${totalRow}-M${totalRow},0)`,
-    `=MAX(M${totalRow}-N${totalRow},0)`,
+
+  // I=9 টাকা, J=10 জমা, K=11 অবশিষ্ট, L=12 পাওনা
+  sheet.getRange(totalRow, 9, 1, 4).setFormulas([[
+    `=SUM(I${dataStartRow}:I${totalRow - 1})`,
+    `=SUM(J${dataStartRow}:J${totalRow - 1})`,
+    `=MAX(J${totalRow}-I${totalRow},0)`,
+    `=MAX(I${totalRow}-J${totalRow},0)`,
   ]]);
+
   styleSheet(sheet, customerName, address, mobile);
   sheet.getRange(totalRow, 1, 1, HEADERS.length)
     .setFontWeight('bold')
     .setFontColor('#7f6000')
     .setBackground('#fff2cc')
     .setBorder(true, true, true, true, true, true, '#d6b656', SpreadsheetApp.BorderStyle.SOLID);
-  sheet.getRange(totalRow, 13, 1, 4)
+  sheet.getRange(totalRow, 9, 1, 4)
     .setNumberFormat('৳ #,##0.##')
     .setFontSize(12)
     .setFontWeight('bold')
@@ -549,55 +536,42 @@ function doGet(e) {
       const values = sheet.getDataRange().getValues();
       const totalRow = values.find((row) => String(row[0] || '').trim() === 'মোট');
       if (totalRow) {
-        globalDeposited += (Number(totalRow[13]) || 0);
-        globalRemaining += (Number(totalRow[14]) || 0);
-        globalDue += (Number(totalRow[15]) || 0);
+        // J=col10(idx9)=জমা, K=col11(idx10)=অবশিষ্ট, L=col12(idx11)=পাওনা
+        globalDeposited += (Number(totalRow[9]) || 0);
+        globalRemaining += (Number(totalRow[10]) || 0);
+        globalDue += (Number(totalRow[11]) || 0);
         totalCustomers++;
       }
     });
 
-    return jsonResponse({
-      ok: true,
-      totalCustomers,
-      globalDeposited,
-      globalRemaining,
-      globalDue,
-    });
+    return jsonResponse({ ok: true, totalCustomers, globalDeposited, globalRemaining, globalDue });
   }
 
   if (action === 'customerSummary' && sheetName) {
     const sheet = spreadsheet.getSheetByName(sheetName);
-    if (!sheet) {
-      return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
-    }
+    if (!sheet) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
 
     const values = sheet.getDataRange().getValues();
     const totalRow = values.find((row) => String(row[0] || '').trim() === 'মোট');
-    if (!totalRow) {
-      return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
-    }
+    if (!totalRow) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
 
+    // I=col9(idx8)=টাকা, J=col10(idx9)=জমা, K=col11(idx10)=অবশিষ্ট, L=col12(idx11)=পাওনা
     return jsonResponse({
       ok: true,
-      deposited: Number(totalRow[13]) || 0,
-      remaining: Number(totalRow[14]) || 0,
-      due: Number(totalRow[15]) || 0,
-      totalAmount: Number(totalRow[12]) || 0,
+      deposited: Number(totalRow[9]) || 0,
+      remaining: Number(totalRow[10]) || 0,
+      due: Number(totalRow[11]) || 0,
+      totalAmount: Number(totalRow[8]) || 0,
     });
   }
 
   if (action === 'openSheet' && sheetName) {
     const sheet = spreadsheet.getSheetByName(sheetName);
-
-    if (!sheet) {
-      return jsonResponse({ ok: false, message: 'Sheet not found: ' + sheetName });
-    }
+    if (!sheet) return jsonResponse({ ok: false, message: 'Sheet not found: ' + sheetName });
 
     const sheetUrl =
       'https://docs.google.com/spreadsheets/d/' +
-      SPREADSHEET_ID +
-      '/edit#gid=' +
-      sheet.getSheetId();
+      SPREADSHEET_ID + '/edit#gid=' + sheet.getSheetId();
 
     return HtmlService.createHtmlOutput(
       '<script>window.location.href = ' + JSON.stringify(sheetUrl) + ';</script>'
@@ -635,15 +609,14 @@ function doGet(e) {
         const lastRow = sheet.getLastRow();
         const headerRow = getHeaderRowIndex(sheet);
         if (lastRow <= headerRow) return;
-
         try {
-          const challanCol = sheet.getRange(headerRow + 1, 17, lastRow - headerRow, 1).getValues();
+          // চালান নং এখন M=col13
+          const challanCol = sheet.getRange(headerRow + 1, 13, lastRow - headerRow, 1).getValues();
           challanCol.forEach(row => {
             const val = parseInt(row[0], 10);
             if (!isNaN(val) && val > max) max = val;
           });
-        } catch (e) {
-        }
+        } catch (e) {}
       });
       nextChallan = max + 1;
       props.setProperty('NextChallanNo', String(nextChallan));
@@ -655,35 +628,12 @@ function doGet(e) {
   return jsonResponse({ ok: true, message: 'doGet works' });
 }
 
-/**
- * Creates a brand-new, fully-formatted customer sheet.
- *
- * Final layout:
- *   Row 1 — Branded title (গ্রাহকের নাম, blue background)
- *   Row 2 — Meta info (📞 মোবাইল / 📍 ঠিকানা)
- *   Row 3 — Column headers (তারিখ, গ্রাহকের নাম, গাড়ি, …, চালান নং)
- *   Row 4+ — Data rows (formulas applied automatically via applyCalculatedRow on edit)
- *
- * All calculations (ফুট, টাকা, অবশিষ্ট, পাওনা) work automatically through
- * the onEdit trigger and applyCalculatedRow once the first sale row is added.
- */
 function createCustomerSheet(spreadsheet, customerName, mobile, address) {
-  // Reuse existing sheet if present, otherwise create fresh
   let sheet = spreadsheet.getSheetByName(customerName);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(customerName);
-  }
+  if (!sheet) sheet = spreadsheet.insertSheet(customerName);
 
-  // Write HEADERS to row 1 first so ensureCustomerTitleHeader detects
-  // firstCell === 'তারিখ' and inserts the two branded title rows above it.
   sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-
-  // styleSheet internally calls ensureCustomerTitleHeader which:
-  //   - sees row-1 = 'তারিখ'  → inserts 2 rows above  → layout becomes rows 1/2/3
-  //   - then styles the header row (now row 3), sets column widths, freeze, filter, etc.
   styleSheet(sheet, customerName, address, mobile);
-
-  // Sync name/mobile/address to the Customers registry sheet
   syncCustomerMetaToCustomersSheet(sheet);
 
   return sheet;
@@ -701,25 +651,17 @@ function doPost(e) {
       const address = String(payload.address || '').trim();
       if (!name) return jsonResponse({ ok: false, message: 'Name missing' });
 
-      // Check duplicate in Customers registry sheet
       const values = customersSheet.getDataRange().getValues();
       for (let i = 1; i < values.length; i++) {
         if (String(values[i][0]).trim().toLowerCase() === name.toLowerCase()) {
-          // Customer entry exists — ensure their sheet also exists and is formatted
           let existingSheet = spreadsheet.getSheetByName(name);
-          if (!existingSheet) {
-            existingSheet = createCustomerSheet(spreadsheet, name, mobile, address);
-          }
+          if (!existingSheet) existingSheet = createCustomerSheet(spreadsheet, name, mobile, address);
           return jsonResponse({ ok: true, message: 'Already exists', sheetCreated: false });
         }
       }
 
-      // Add to Customers registry
       customersSheet.appendRow([name, mobile, address]);
-
-      // Create and fully format the customer's own sheet
       createCustomerSheet(spreadsheet, name, mobile, address);
-
       return jsonResponse({ ok: true, message: 'Added customer', sheetCreated: true });
     }
 
@@ -740,24 +682,18 @@ function doPost(e) {
       let targetSheet = null;
       const allSheets = spreadsheet.getSheets();
       for (let i = 0; i < allSheets.length; i++) {
-        const s = allSheets[i];
-        const sName = s.getName();
-        if (sName.toLowerCase() === name.toLowerCase()) {
-          targetSheet = s;
+        if (allSheets[i].getName().toLowerCase() === name.toLowerCase()) {
+          targetSheet = allSheets[i];
           break;
         }
       }
 
-      const safeName = targetSheet ? targetSheet.getName() : name;
       let deletedSheet = false;
-
       if (targetSheet) {
         try {
           if (allSheets.length <= 2) {
             if (!spreadsheet.getSheetByName('__temp_placeholder__')) {
-              try {
-                spreadsheet.insertSheet('__temp_placeholder__');
-              } catch (eT) {}
+              try { spreadsheet.insertSheet('__temp_placeholder__'); } catch (eT) {}
             }
           }
           spreadsheet.deleteSheet(targetSheet);
@@ -770,9 +706,7 @@ function doPost(e) {
       }
 
       if (customersFoundIdx !== -1) {
-        try {
-          customersSheet.deleteRow(customersFoundIdx);
-        } catch (er) {}
+        try { customersSheet.deleteRow(customersFoundIdx); } catch (er) {}
       }
 
       return jsonResponse({
@@ -792,16 +726,21 @@ function doPost(e) {
       removeTotalsRow(depositSheet);
       depositSheet.getRange(3, 1, 1, HEADERS.length).setValues([HEADERS]);
 
+      // 13 column — deposit row
       depositSheet.appendRow([
-        payload.date || '',
-        payload.customer || '',
-        '',
-        '', '', '', '',
-        'জমা',
-        0, 0, 0, 0, 0,
-        Number(payload.deposited || 0),
-        0, 0,
-        '',
+        payload.date || '',          // A তারিখ
+        '',                          // B গাড়ি
+        0,                           // C গাড়ির পরিমাপ (ফুট)
+        'জমা',                       // D বিবরণ
+        0,                           // E টন
+        0,                           // F গুণ
+        0,                           // G ফুট
+        0,                           // H দর
+        0,                           // I টাকা
+        Number(payload.deposited || 0), // J জমা
+        0,                           // K অবশিষ্ট
+        0,                           // L পাওনা
+        '',                          // M চালান নং
       ]);
       applyCalculatedRow(depositSheet, depositSheet.getLastRow());
       addTotalsRow(depositSheet, depositSheetName, payload.address || '', payload.mobile || '');
@@ -809,48 +748,41 @@ function doPost(e) {
       return jsonResponse({ ok: true, message: 'Deposit added', sheetName: depositSheetName });
     }
 
+    // ── সাধারণ sale entry ──
     const sheetName = String(payload.sheetName || payload.customer || '').trim();
-
-    if (!sheetName) {
-      return jsonResponse({ ok: false, message: 'Missing sheetName/customer' });
-    }
+    if (!sheetName) return jsonResponse({ ok: false, message: 'Missing sheetName/customer' });
 
     let sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) sheet = spreadsheet.insertSheet(sheetName);
 
     ensureCustomerTitleHeader(sheet, sheetName, payload.address || '', payload.mobile || '');
-
     removeTotalsRow(sheet);
     sheet.getRange(3, 1, 1, HEADERS.length).setValues([HEADERS]);
 
     const props = PropertiesService.getScriptProperties();
     let currentNext = parseInt(props.getProperty('NextChallanNo'), 10) || 5000;
     let challanNo = parseInt(payload.challanNo, 10);
-
-    if (isNaN(challanNo) || challanNo < currentNext) {
-      challanNo = currentNext;
-    }
-
+    if (isNaN(challanNo) || challanNo < currentNext) challanNo = currentNext;
     props.setProperty('NextChallanNo', String(challanNo + 1));
 
+    // 13 column — দৈর্ঘ্য/প্রস্থ/উচ্চতা পাঠানো হবে না
+    // vehicleMeasurementFeet = measurement mode-এ ফুট, নইলে 0
+    const vehicleFeet = payload.vehicleMeasurementFeet != null ? Number(payload.vehicleMeasurementFeet) : 0;
+
     sheet.appendRow([
-      payload.date || '',
-      payload.customer || '',
-      payload.vehicle || '',
-      payload.length != null ? Number(payload.length) : '',
-      payload.width != null ? Number(payload.width) : '',
-      payload.height != null ? Number(payload.height) : '',
-      payload.vehicleMeasurementFeet != null ? Number(payload.vehicleMeasurementFeet) : '',
-      payload.description || '',
-      Number(payload.tons || 0),
-      Number(payload.feetPerTon || 0),
-      Number(payload.feet || 0),
-      Number(payload.rate || 0),
-      Number(payload.amount || 0),
-      Number(payload.deposited || 0),
-      Number(payload.remaining || 0),
-      Number(payload.due || 0),
-      challanNo,
+      payload.date || '',              // A তারিখ
+      payload.vehicle || '',           // B গাড়ি
+      vehicleFeet,                     // C গাড়ির পরিমাপ (ফুট)
+      payload.description || '',       // D বিবরণ
+      Number(payload.tons || 0),       // E টন
+      Number(payload.feetPerTon || 0), // F গুণ
+      Number(payload.feet || 0),       // G ফুট
+      Number(payload.rate || 0),       // H দর
+      Number(payload.amount || 0),     // I টাকা
+      Number(payload.deposited || 0),  // J জমা
+      Number(payload.remaining || 0),  // K অবশিষ্ট
+      Number(payload.due || 0),        // L পাওনা
+      challanNo,                       // M চালান নং
     ]);
     applyCalculatedRow(sheet, sheet.getLastRow());
     addTotalsRow(sheet, sheetName, payload.address || '', payload.mobile || '');

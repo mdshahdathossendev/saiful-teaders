@@ -14,6 +14,10 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "সাইফুল ট্রেডার্স | Saiful Traders",
   description: "মেসার্স সাইফুল ট্রেডার্স এন্ড স্টোন ক্রাশার — বিক্রয় হিসাব ড্যাশবোর্ড",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
