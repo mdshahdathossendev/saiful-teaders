@@ -3,19 +3,19 @@ const SPREADSHEET_ID = '17iutMCNZLbWFj4SVTkFje8z9oxlR67KQPCXU45lH0LQ';
 // গ্রাহকের নাম টপ রো-তে (row 1) থাকবে — data column-এ থাকবে না
 // দৈর্ঘ্য/প্রস্থ/উচ্চতা শিটে যাবে না — শুধু ফুট যাবে
 const HEADERS = [
-  'তারিখ',              // A=1
-  'গাড়ি',               // B=2
-  'গাড়ির পরিমাপ (ফুট)', // C=3
-  'বিবরণ',              // D=4
-  'টন',                 // E=5
-  'গুণ',                // F=6
-  'ফুট',                // G=7
-  'দর',                 // H=8
-  'টাকা',               // I=9
-  'জমা',                // J=10
-  'অবশিষ্ট',           // K=11
-  'পাওনা',              // L=12
-  'চালান নং',          // M=13
+  'তারিখ',                   // A=1
+  'গাড়ি',                    // B=2
+  'গাড়ির পরিমাপ (CFT)',      // C=3
+  'বিবরণ',                   // D=4
+  'টন',                      // E=5
+  'গুণ',                     // F=6
+  'ফুট',                     // G=7
+  'দর',                      // H=8
+  'টাকা',                    // I=9
+  'জমা',                     // J=10
+  'অবশিষ্ট',                 // K=11
+  'পাওনা',                   // L=12
+  'চালান নং',                // M=13
 ];
 
 function normalizeText(value) {
@@ -71,56 +71,14 @@ function getHeaderRowIndex(sheet) {
  *   M=13 চালান নং
  */
 function applyCalculatedRow(sheet, row) {
-  const headerRow = getHeaderRowIndex(sheet);
-  const dataStartRow = headerRow + 1;
-  if (row <= headerRow || row > sheet.getLastRow()) return;
-
-  try {
-    // গাড়ির পরিমাপ (C=3)
-    sheet.getRange(row, 3).setValue(toNumber(sheet.getRange(row, 3).getValue()));
-
-    // টন (E=5), গুণ (F=6)
-    const tonVals = sheet.getRange(row, 5, 1, 2).getValues()[0];
-    sheet.getRange(row, 5, 1, 2).setValues([[
-      toNumber(tonVals[0]),
-      toNumber(tonVals[1]),
-    ]]);
-
-    // দর (H=8), জমা (J=10)
-    sheet.getRange(row, 8).setValue(toNumber(sheet.getRange(row, 8).getValue()));
-    sheet.getRange(row, 10).setValue(toNumber(sheet.getRange(row, 10).getValue()));
-  } catch (e) {}
-
-  // ── Col G (7): ফুট = C যদি C>0, নাহলে E×F
-  sheet.getRange(row, 7).setFormula(
-    `=IF(C${row}>0,C${row},E${row}*F${row})`
-  );
-
-  // ── Col I (9): টাকা = G × H
-  sheet.getRange(row, 9).setFormula(`=G${row}*H${row}`);
-
-  // ── Col K (11): অবশিষ্ট
-  sheet.getRange(row, 11).setFormula(
-    `=MAX(SUM($J$${dataStartRow}:J${row})-SUM($I$${dataStartRow}:I${row}),0)`
-  );
-
-  // ── Col L (12): পাওনা
-  sheet.getRange(row, 12).setFormula(
-    `=MAX(SUM($I$${dataStartRow}:I${row})-SUM($J$${dataStartRow}:J${row}),0)`
-  );
+  // এই ফাংশন এখন কিছু করে না — সব data সরাসরি value হিসেবে যায়
+  // শুধু মোট রো-তে formula থাকবে (addTotalsRow এ)
 }
 
-function refreshCalculatedRows(sheet) {
-  const lastRow = sheet.getLastRow();
-  const headerRow = getHeaderRowIndex(sheet);
-  if (lastRow <= headerRow) return;
 
-  const firstColumnValues = sheet.getRange(headerRow + 1, 1, lastRow - headerRow, 1).getValues();
-  firstColumnValues.forEach((value, index) => {
-    if (String(value[0] || '').trim() !== 'মোট') {
-      applyCalculatedRow(sheet, index + headerRow + 1);
-    }
-  });
+function refreshCalculatedRows(sheet) {
+  // সব data রো plain value — কিছু করার নেই
+  // মোট রো addTotalsRow এ handle হয়
 }
 
 function rebuildTotalsRow(sheet, customerName, address, mobile) {
@@ -250,9 +208,7 @@ function onEdit(e) {
       const actualLast = totalsRow ? totalsRow - 1 : lastRow;
 
       if (!(rEnd < dataStartRow || rStart > actualLast)) {
-        for (let row = Math.max(rStart, dataStartRow); row <= Math.min(rEnd, actualLast); row++) {
-          applyCalculatedRow(sheet, row);
-        }
+        // data row এডিট করলে শুধু মোট রো rebuild করি — formula বসাই না
       }
     }
 
@@ -445,6 +401,7 @@ function styleSheet(sheet, customerName, address, mobile) {
     sheet.getRange(headerRow + 1, 1, lastRow - headerRow, lastColumn)
       .setFontColor('#1f2937')
       .setVerticalAlignment('middle')
+      .setHorizontalAlignment('center')
       .setBorder(true, true, true, true, true, true, '#d9e2f3', SpreadsheetApp.BorderStyle.SOLID);
 
     // তারিখ (A=1)
@@ -453,12 +410,16 @@ function styleSheet(sheet, customerName, address, mobile) {
     // গাড়ির পরিমাপ (C=3) — decimal
     sheet.getRange(headerRow + 1, 3, lastRow - headerRow, 1)
       .setNumberFormat('#,##0.##')
-      .setHorizontalAlignment('right');
+      .setHorizontalAlignment('center');
 
     // টন থেকে পাওনা (E=5 থেকে L=12)
     sheet.getRange(headerRow + 1, 5, lastRow - headerRow, 8)
       .setNumberFormat('#,##0.##')
-      .setHorizontalAlignment('right');
+      .setHorizontalAlignment('center');
+
+    // বিবরণ (D=4) ও গাড়ি (B=2) — left align
+    sheet.getRange(headerRow + 1, 2, lastRow - headerRow, 1).setHorizontalAlignment('left');
+    sheet.getRange(headerRow + 1, 4, lastRow - headerRow, 1).setHorizontalAlignment('left');
 
     for (let row = headerRow + 1; row <= lastRow; row += 1) {
       if (row % 2 === 0) {
@@ -512,12 +473,13 @@ function addTotalsRow(sheet, customerName, address, mobile) {
     .setFontWeight('bold')
     .setFontColor('#7f6000')
     .setBackground('#fff2cc')
+    .setHorizontalAlignment('center')
     .setBorder(true, true, true, true, true, true, '#d6b656', SpreadsheetApp.BorderStyle.SOLID);
   sheet.getRange(totalRow, 9, 1, 4)
     .setNumberFormat('৳ #,##0.##')
     .setFontSize(12)
     .setFontWeight('bold')
-    .setHorizontalAlignment('right');
+    .setHorizontalAlignment('center');
 }
 
 function doGet(e) {
@@ -761,10 +723,7 @@ function doPost(e) {
       pdSheet.getRange(3, 1, 1, HEADERS.length).setValues([HEADERS]);
 
       const dueAmount = Number(payload.previousDue || 0);
-      const headerRow = getHeaderRowIndex(pdSheet);
-      const dataStartRow = headerRow + 1;
 
-      // রো append করি — I(টাকা)=dueAmount সরাসরি value হিসেবে
       pdSheet.appendRow([
         payload.date || '',   // A তারিখ
         '',                   // B গাড়ি
@@ -780,17 +739,6 @@ function doPost(e) {
         0,                    // L পাওনা
         '',                   // M চালান নং
       ]);
-
-      const row = pdSheet.getLastRow();
-
-      // applyCalculatedRow ডাকা যাবে না — সেটা G×H দিয়ে I overwrite করে ফেলে
-      // শুধু K ও L-এর cumulative formula সেট করি
-      pdSheet.getRange(row, 11).setFormula(
-        `=MAX(SUM($J$${dataStartRow}:J${row})-SUM($I$${dataStartRow}:I${row}),0)`
-      );
-      pdSheet.getRange(row, 12).setFormula(
-        `=MAX(SUM($I$${dataStartRow}:I${row})-SUM($J$${dataStartRow}:J${row}),0)`
-      );
 
       addTotalsRow(pdSheet, pdSheetName, payload.address || '', payload.mobile || '');
 
@@ -825,17 +773,7 @@ function doPost(e) {
         '',                          // M চালান নং
       ]);
 
-      const depositRow = depositSheet.getLastRow();
-      const depositHeaderRow = getHeaderRowIndex(depositSheet);
-      const depositDataStart = depositHeaderRow + 1;
-
-      // applyCalculatedRow ডাকলে I overwrite হয়ে যায়, তাই শুধু K ও L formula
-      depositSheet.getRange(depositRow, 11).setFormula(
-        `=MAX(SUM($J$${depositDataStart}:J${depositRow})-SUM($I$${depositDataStart}:I${depositRow}),0)`
-      );
-      depositSheet.getRange(depositRow, 12).setFormula(
-        `=MAX(SUM($I$${depositDataStart}:I${depositRow})-SUM($J$${depositDataStart}:J${depositRow}),0)`
-      );
+      // K ও L plain value — মোট রো addTotalsRow এ ঠিক হবে
       addTotalsRow(depositSheet, depositSheetName, payload.address || '', payload.mobile || '');
 
       return jsonResponse({ ok: true, message: 'Deposit added', sheetName: depositSheetName });
