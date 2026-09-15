@@ -15,6 +15,7 @@ import DeleteCustomerModal from '@/components/dashboard/modals/DeleteCustomerMod
 import DepositModal from '@/components/dashboard/modals/DepositModal';
 import DepositSuccessModal from '@/components/dashboard/modals/DepositSuccessModal';
 import SlipModal from '@/components/dashboard/modals/SlipModal';
+import PreviousDueModal from '@/components/dashboard/modals/PreviousDueModal';
 
 export default function ProjectDashboardPage() {
   const db = useDashboard();
@@ -68,6 +69,7 @@ export default function ProjectDashboardPage() {
         onAddCustomer={db.handleAddCustomer}
         onDeleteCustomer={db.handleDeleteCustomer}
         onOpenDepositModal={() => { db.setDepositAmount(''); db.setShowDepositModal(true); }}
+        onOpenPreviousDueModal={() => { db.setPreviousDueAmount(''); db.setError(''); db.setShowPreviousDueModal(true); }}
       />
 
       <SalesForm
@@ -128,6 +130,29 @@ export default function ProjectDashboardPage() {
           customerName={db.form.customer}
           amount={db.depositSuccessAmount}
           onClose={() => db.setShowDepositSuccess(false)}
+        />
+      )}
+
+      {db.showPreviousDueModal && (
+        <PreviousDueModal
+          customerName={db.form.customer}
+          previousDueAmount={db.previousDueAmount}
+          setPreviousDueAmount={db.setPreviousDueAmount}
+          error={db.error}
+          status={db.status}
+          isSubmitting={db.isSubmitting}
+          onConfirm={db.handleAddPreviousDue}
+          onClose={() => { db.setShowPreviousDueModal(false); db.setError(''); db.setStatus(''); }}
+        />
+      )}
+
+      {db.showPreviousDueSuccess && (
+        <DepositSuccessModal
+          customerName={db.form.customer}
+          amount={db.previousDueSuccessAmount}
+          title="পাওয়ানা যোগ হয়েছে!"
+          subText="এর হিসাবে আগের পাওয়ানা যোগ হয়েছে"
+          onClose={() => db.setShowPreviousDueSuccess(false)}
         />
       )}
 

@@ -1,4 +1,4 @@
-export default function DepositSuccessModal({ customerName, amount, onClose }) {
+export default function DepositSuccessModal({ customerName, amount, onClose, title, subText }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="deposit-success-panel" onClick={(e) => e.stopPropagation()}>
@@ -9,10 +9,10 @@ export default function DepositSuccessModal({ customerName, amount, onClose }) {
             <polyline points="22,36 31,45 50,26" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h3 className="deposit-success-title">জমা সফল হয়েছে!</h3>
+        <h3 className="deposit-success-title">{title || 'জমা সফল হয়েছে!'}</h3>
         <div className="deposit-success-amount">৳ {Number(amount).toLocaleString('bn-BD')}</div>
         <p className="deposit-success-sub">
-          <strong>{customerName}</strong>-এর হিসাবে জমা যোগ হয়েছে
+          <strong>{customerName}</strong>-{subText || 'এর হিসাবে জমা যোগ হয়েছে'}
         </p>
         <button type="button" className="deposit-success-ok" onClick={onClose}>ঠিক আছে</button>
       </div>

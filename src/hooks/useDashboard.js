@@ -12,6 +12,7 @@ import {
   roundMeasurement,
   toEnglishNumber,
 } from '@/lib/dashboardUtils';
+import { saveMultipleToHistory } from '@/hooks/useAutocomplete';
 
 export function useDashboard() {
   const [username, setUsername] = useState('');
@@ -35,6 +36,10 @@ export function useDashboard() {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositSuccessAmount, setDepositSuccessAmount] = useState(0);
   const [showDepositSuccess, setShowDepositSuccess] = useState(false);
+  const [showPreviousDueModal, setShowPreviousDueModal] = useState(false);
+  const [previousDueAmount, setPreviousDueAmount] = useState('');
+  const [showPreviousDueSuccess, setShowPreviousDueSuccess] = useState(false);
+  const [previousDueSuccessAmount, setPreviousDueSuccessAmount] = useState(0);
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', mobile: '', address: '' });
   const [globalSummary, setGlobalSummary] = useState({ globalDeposited: 0, globalRemaining: 0, globalDue: 0 });
   const [isLoadingGlobalSummary, setIsLoadingGlobalSummary] = useState(false);
@@ -386,6 +391,43 @@ export function useDashboard() {
     }
   };
 
+  // ── Add previous due ─────────────────────────────────────────────────────
+
+  const handleAddPreviousDue = async () => {
+    const customer = form.customer.trim();
+    const amount = Number(toEnglishNumber(previousDueAmount)) || 0;
+    if (!customer) { setError('গ্রাহকের নাম নির্বাচন করুন।'); return; }
+    if (amount <= 0) { setError('সঠিক পরিমাণ দিন।'); return; }
+
+    setIsSubmitting(true); setError(''); setStatus('');
+    const obj = customerOptions.find((c) => c.name.toLowerCase() === customer.toLowerCase());
+    try {
+      const res = await fetch('/api/sales-submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'previousDue',
+          date: form.date,
+          customer,
+          sheetName: customer,
+          mobile: obj?.mobile || '',
+          address: obj?.address || '',
+          previousDue: amount,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || `HTTP ${res.status}`);
+      setPreviousDueAmount('');
+      setShowPreviousDueModal(false);
+      setPreviousDueSuccessAmount(amount);
+      setShowPreviousDueSuccess(true);
+      await refreshAllNow(false);
+    } catch (err) {
+      setError(`পাওয়ানা যোগ করা সম্ভব হয়নি। ${err?.message || ''}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // ── Sale submit ───────────────────────────────────────────────────────────
 
   const handleSubmit = async (e) => {
@@ -448,6 +490,22 @@ export function useDashboard() {
       setError('');
       setForm({ ...getInitialForm(), customer, challanNo: String(nextChallan) });
       await refreshAllNow(false);
+
+      // UI reset ও sheet sync-এর পরে background-এ localStorage history সেভ করি
+      setTimeout(() => {
+        saveMultipleToHistory([
+          { key: 'description',      value: form.description },
+          { key: 'vehicle',          value: form.vehicle },
+          { key: 'driverName',       value: form.driverName },
+          { key: 'driverMobile',     value: form.driverMobile },
+          { key: 'destination',      value: form.destination },
+          { key: 'rate',             value: form.rate },
+          { key: 'truckRatePerFoot', value: form.truckRatePerFoot },
+          { key: 'tons',             value: form.tons },
+          { key: 'feetPerTon',       value: form.feetPerTon },
+          { key: 'deposited',        value: form.deposited },
+        ]);
+      }, 0);
     } catch (err) {
       const msg = err?.message || '';
       setError(msg ? `Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি। ${msg}` : 'Google Sheet-এ ডাটা পাঠানো সম্ভব হয়নি।');
@@ -602,6 +660,10 @@ ${measureRow}
     depositAmount, setDepositAmount,
     showDepositSuccess, setShowDepositSuccess, depositSuccessAmount,
     handleDepositOnly,
+    showPreviousDueModal, setShowPreviousDueModal,
+    previousDueAmount, setPreviousDueAmount,
+    handleAddPreviousDue,
+    showPreviousDueSuccess, setShowPreviousDueSuccess, previousDueSuccessAmount,
     // slip
     lastSlip, setLastSlip, handleDownloadSlip,
   };

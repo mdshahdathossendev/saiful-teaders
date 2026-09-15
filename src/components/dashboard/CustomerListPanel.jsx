@@ -12,6 +12,7 @@ export default function CustomerListPanel({
   onAddCustomer,
   onDeleteCustomer,
   onOpenDepositModal,
+  onOpenPreviousDueModal,
 }) {
   return (
     <section className="customer-list-panel">
@@ -70,6 +71,17 @@ export default function CustomerListPanel({
           >
             <span aria-hidden="true">💰</span>
             <span>জমা দিন</span>
+          </button>
+
+          <button
+            type="button"
+            className="previous-due-btn"
+            onClick={onOpenPreviousDueModal}
+            disabled={!form.customer}
+            title="আগের পাওয়ানা যোগ করুন"
+          >
+            <span aria-hidden="true">📋</span>
+            <span>পাওয়া এড</span>
           </button>
         </div>
       </div>

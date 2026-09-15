@@ -1,3 +1,4 @@
+import AutocompleteInput from './AutocompleteInput';
 import LocationPinIcon from './LocationPinIcon';
 
 export default function SalesForm({
@@ -66,10 +67,10 @@ export default function SalesForm({
         <div className="inline-row description-full-row">
           <label className="description-label-full">
             মালের বিবরণ
-            <input
-              type="text"
+            <AutocompleteInput
+              fieldKey="description"
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(v) => setForm({ ...form, description: v })}
               placeholder="যেমন: বালু, নুড়ি, ইট"
               className="description-input-full"
             />
@@ -103,14 +104,24 @@ export default function SalesForm({
             <div className="formula-group">
               <label>
                 টন
-                <input type="text" inputMode="numeric" value={form.tons}
-                  onChange={(e) => onNumberInput('tons', e.target.value)} placeholder="টন" />
+                <AutocompleteInput
+                  fieldKey="tons"
+                  inputMode="numeric"
+                  value={form.tons}
+                  onChange={(v) => onNumberInput('tons', v)}
+                  placeholder="টন"
+                />
               </label>
               <span className="formula-symbol" aria-hidden="true">×</span>
               <label>
                 গুণ
-                <input type="text" inputMode="numeric" value={form.feetPerTon}
-                  onChange={(e) => onNumberInput('feetPerTon', e.target.value)} placeholder="গুণ" />
+                <AutocompleteInput
+                  fieldKey="feetPerTon"
+                  inputMode="numeric"
+                  value={form.feetPerTon}
+                  onChange={(v) => onNumberInput('feetPerTon', v)}
+                  placeholder="গুণ"
+                />
               </label>
             </div>
           </div>
@@ -120,20 +131,35 @@ export default function SalesForm({
             <div className="formula-group measurement-formula">
               <label>
                 দৈর্ঘ্য
-                <input type="text" inputMode="decimal" value={form.length}
-                  onChange={(e) => onNumberInput('length', e.target.value)} placeholder="দৈর্ঘ্য" />
+                <AutocompleteInput
+                  fieldKey="length"
+                  inputMode="decimal"
+                  value={form.length}
+                  onChange={(v) => onNumberInput('length', v)}
+                  placeholder="দৈর্ঘ্য"
+                />
               </label>
               <span className="formula-symbol small" aria-hidden="true">×</span>
               <label>
                 প্রস্থ
-                <input type="text" inputMode="decimal" value={form.width}
-                  onChange={(e) => onNumberInput('width', e.target.value)} placeholder="প্রস্থ" />
+                <AutocompleteInput
+                  fieldKey="width"
+                  inputMode="decimal"
+                  value={form.width}
+                  onChange={(v) => onNumberInput('width', v)}
+                  placeholder="প্রস্থ"
+                />
               </label>
               <span className="formula-symbol small" aria-hidden="true">×</span>
               <label>
                 উচ্চতা
-                <input type="text" inputMode="decimal" value={form.height}
-                  onChange={(e) => onNumberInput('height', e.target.value)} placeholder="উচ্চতা" />
+                <AutocompleteInput
+                  fieldKey="height"
+                  inputMode="decimal"
+                  value={form.height}
+                  onChange={(v) => onNumberInput('height', v)}
+                  placeholder="উচ্চতা"
+                />
               </label>
             </div>
           </div>
@@ -149,8 +175,13 @@ export default function SalesForm({
             <span className="formula-symbol" aria-hidden="true">×</span>
             <label>
               দর
-              <input type="text" inputMode="numeric" value={form.rate}
-                onChange={(e) => onNumberInput('rate', e.target.value)} placeholder="দর" />
+              <AutocompleteInput
+                fieldKey="rate"
+                inputMode="numeric"
+                value={form.rate}
+                onChange={(v) => onNumberInput('rate', v)}
+                placeholder="দর"
+              />
             </label>
             <span className="formula-symbol" aria-hidden="true">=</span>
             <label>
@@ -169,17 +200,18 @@ export default function SalesForm({
 
           <div className="inline-row">
             {[
-              ['vehicle',     'গাড়ি নাম্বার',        'text', 'যেমন: রাজভোগ ১০'],
-              ['driverName',  'ড্রাইভারের নাম',      'text', 'যেমন: রহিম উদ্দিন'],
-              ['driverMobile','ড্রাইভারের মোবাইল',   'tel',  'যেমন: ০১৭XXXXXXXX'],
-              ['destination', 'গন্তব্য স্থান',        'text', 'যেমন: সিলেট সদর'],
+              ['vehicle',      'গাড়ি নাম্বার',       'text', 'যেমন: রাজভোগ ১০'],
+              ['driverName',   'ড্রাইভারের নাম',     'text', 'যেমন: রহিম উদ্দিন'],
+              ['driverMobile', 'ড্রাইভারের মোবাইল',  'tel',  'যেমন: ০১৭XXXXXXXX'],
+              ['destination',  'গন্তব্য স্থান',       'text', 'যেমন: সিলেট সদর'],
             ].map(([field, labelText, type, placeholder]) => (
               <label key={field}>
                 {labelText}
-                <input
+                <AutocompleteInput
+                  fieldKey={field}
                   type={type}
                   value={form[field]}
-                  onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+                  onChange={(v) => setForm({ ...form, [field]: v })}
                   placeholder={placeholder}
                 />
               </label>
@@ -195,8 +227,13 @@ export default function SalesForm({
               <span className="formula-symbol" aria-hidden="true">×</span>
               <label>
                 প্রতি ফুট ভাড়া
-                <input type="text" inputMode="numeric" value={form.truckRatePerFoot}
-                  onChange={(e) => onNumberInput('truckRatePerFoot', e.target.value)} placeholder="প্রতি ফুট ভাড়া" />
+                <AutocompleteInput
+                  fieldKey="truckRatePerFoot"
+                  inputMode="numeric"
+                  value={form.truckRatePerFoot}
+                  onChange={(v) => onNumberInput('truckRatePerFoot', v)}
+                  placeholder="প্রতি ফুট ভাড়া"
+                />
               </label>
               <span className="formula-symbol" aria-hidden="true">=</span>
               <label>
@@ -215,8 +252,13 @@ export default function SalesForm({
           </label>
           <label>
             নতুন জমা
-            <input type="text" inputMode="numeric" value={form.deposited}
-              onChange={(e) => onNumberInput('deposited', e.target.value)} placeholder="যেমন: ০ বা 0" />
+            <AutocompleteInput
+              fieldKey="deposited"
+              inputMode="numeric"
+              value={form.deposited}
+              onChange={(v) => onNumberInput('deposited', v)}
+              placeholder="যেমন: ০ বা 0"
+            />
           </label>
           <label>
             অবশিষ্ট

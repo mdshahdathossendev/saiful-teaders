@@ -1,4 +1,4 @@
-const SPREADSHEET_ID = '1c7ZyUibkflrm-lOp_eVpmYEge1hriMZAGB93-G-CWCk';
+const SPREADSHEET_ID = '17iutMCNZLbWFj4SVTkFje8z9oxlR67KQPCXU45lH0LQ';
 
 // গ্রাহকের নাম টপ রো-তে (row 1) থাকবে — data column-এ থাকবে না
 // দৈর্ঘ্য/প্রস্থ/উচ্চতা শিটে যাবে না — শুধু ফুট যাবে
@@ -533,13 +533,30 @@ function doGet(e) {
 
     spreadsheet.getSheets().forEach((sheet) => {
       if (sheet.getName() === 'Customers') return;
-      const values = sheet.getDataRange().getValues();
-      const totalRow = values.find((row) => String(row[0] || '').trim() === 'মোট');
-      if (totalRow) {
-        // J=col10(idx9)=জমা, K=col11(idx10)=অবশিষ্ট, L=col12(idx11)=পাওনা
-        globalDeposited += (Number(totalRow[9]) || 0);
-        globalRemaining += (Number(totalRow[10]) || 0);
-        globalDue += (Number(totalRow[11]) || 0);
+      const headerRow = getHeaderRowIndex(sheet);
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= headerRow) return;
+
+      // data rows থেকে সরাসরি SUM — formula result-এর উপর নির্ভর না করে
+      const values = sheet.getRange(headerRow + 1, 1, lastRow - headerRow, HEADERS.length).getValues();
+      let sheetAmount = 0;
+      let sheetDeposited = 0;
+      let hasData = false;
+
+      values.forEach(function(row) {
+        const label = String(row[0] || '').trim();
+        if (label === 'মোট') return;
+        const amt = Number(row[8]) || 0; // I=idx8=টাকা
+        const dep = Number(row[9]) || 0; // J=idx9=জমা
+        sheetAmount    += amt;
+        sheetDeposited += dep;
+        if (amt > 0 || dep > 0) hasData = true;
+      });
+
+      if (hasData || sheetAmount > 0 || sheetDeposited > 0) {
+        globalDeposited += sheetDeposited;
+        globalRemaining += Math.max(sheetDeposited - sheetAmount, 0);
+        globalDue       += Math.max(sheetAmount - sheetDeposited, 0);
         totalCustomers++;
       }
     });
@@ -551,17 +568,34 @@ function doGet(e) {
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
 
-    const values = sheet.getDataRange().getValues();
-    const totalRow = values.find((row) => String(row[0] || '').trim() === 'মোট');
-    if (!totalRow) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
+    const headerRow = getHeaderRowIndex(sheet);
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= headerRow) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
 
-    // I=col9(idx8)=টাকা, J=col10(idx9)=জমা, K=col11(idx10)=অবশিষ্ট, L=col12(idx11)=পাওনা
+    // মোট রো-র formula result সরাসরি না নিয়ে data rows থেকে সরাসরি SUM করি
+    // I=col9(idx8)=টাকা, J=col10(idx9)=জমা
+    const dataRange = sheet.getRange(headerRow + 1, 1, lastRow - headerRow, HEADERS.length);
+    const values = dataRange.getValues();
+
+    let totalAmount = 0;
+    let totalDeposited = 0;
+
+    values.forEach(function(row) {
+      const label = String(row[0] || '').trim();
+      if (label === 'মোট') return; // totals row বাদ
+      totalAmount    += (Number(row[8])  || 0); // I=idx8
+      totalDeposited += (Number(row[9])  || 0); // J=idx9
+    });
+
+    const remaining = Math.max(totalDeposited - totalAmount, 0);
+    const due       = Math.max(totalAmount - totalDeposited, 0);
+
     return jsonResponse({
       ok: true,
-      deposited: Number(totalRow[9]) || 0,
-      remaining: Number(totalRow[10]) || 0,
-      due: Number(totalRow[11]) || 0,
-      totalAmount: Number(totalRow[8]) || 0,
+      deposited: totalDeposited,
+      remaining: remaining,
+      due: due,
+      totalAmount: totalAmount,
     });
   }
 
@@ -715,6 +749,54 @@ function doPost(e) {
       });
     }
 
+    if (payload.action === 'previousDue') {
+      const pdSheetName = String(payload.sheetName || payload.customer || '').trim();
+      if (!pdSheetName) return jsonResponse({ ok: false, message: 'Missing sheetName' });
+
+      let pdSheet = spreadsheet.getSheetByName(pdSheetName);
+      if (!pdSheet) return jsonResponse({ ok: false, message: 'Sheet not found: ' + pdSheetName });
+
+      ensureCustomerTitleHeader(pdSheet, pdSheetName, payload.address || '', payload.mobile || '');
+      removeTotalsRow(pdSheet);
+      pdSheet.getRange(3, 1, 1, HEADERS.length).setValues([HEADERS]);
+
+      const dueAmount = Number(payload.previousDue || 0);
+      const headerRow = getHeaderRowIndex(pdSheet);
+      const dataStartRow = headerRow + 1;
+
+      // রো append করি — I(টাকা)=dueAmount সরাসরি value হিসেবে
+      pdSheet.appendRow([
+        payload.date || '',   // A তারিখ
+        '',                   // B গাড়ি
+        '',                   // C গাড়ির পরিমাপ
+        'আগের পাওয়ানা',      // D বিবরণ
+        '',                   // E টন
+        '',                   // F গুণ
+        '',                   // G ফুট
+        '',                   // H দর
+        dueAmount,            // I টাকা — সরাসরি পাওনার পরিমাণ
+        0,                    // J জমা
+        0,                    // K অবশিষ্ট
+        0,                    // L পাওনা
+        '',                   // M চালান নং
+      ]);
+
+      const row = pdSheet.getLastRow();
+
+      // applyCalculatedRow ডাকা যাবে না — সেটা G×H দিয়ে I overwrite করে ফেলে
+      // শুধু K ও L-এর cumulative formula সেট করি
+      pdSheet.getRange(row, 11).setFormula(
+        `=MAX(SUM($J$${dataStartRow}:J${row})-SUM($I$${dataStartRow}:I${row}),0)`
+      );
+      pdSheet.getRange(row, 12).setFormula(
+        `=MAX(SUM($I$${dataStartRow}:I${row})-SUM($J$${dataStartRow}:J${row}),0)`
+      );
+
+      addTotalsRow(pdSheet, pdSheetName, payload.address || '', payload.mobile || '');
+
+      return jsonResponse({ ok: true, message: 'Previous due added', sheetName: pdSheetName });
+    }
+
     if (payload.action === 'depositOnly') {
       const depositSheetName = String(payload.sheetName || payload.customer || '').trim();
       if (!depositSheetName) return jsonResponse({ ok: false, message: 'Missing sheetName' });
@@ -730,19 +812,30 @@ function doPost(e) {
       depositSheet.appendRow([
         payload.date || '',          // A তারিখ
         '',                          // B গাড়ি
-        0,                           // C গাড়ির পরিমাপ (ফুট)
+        '',                          // C গাড়ির পরিমাপ (ফুট)
         'জমা',                       // D বিবরণ
-        0,                           // E টন
-        0,                           // F গুণ
-        0,                           // G ফুট
-        0,                           // H দর
+        '',                          // E টন
+        '',                          // F গুণ
+        '',                          // G ফুট
+        '',                          // H দর
         0,                           // I টাকা
         Number(payload.deposited || 0), // J জমা
         0,                           // K অবশিষ্ট
         0,                           // L পাওনা
         '',                          // M চালান নং
       ]);
-      applyCalculatedRow(depositSheet, depositSheet.getLastRow());
+
+      const depositRow = depositSheet.getLastRow();
+      const depositHeaderRow = getHeaderRowIndex(depositSheet);
+      const depositDataStart = depositHeaderRow + 1;
+
+      // applyCalculatedRow ডাকলে I overwrite হয়ে যায়, তাই শুধু K ও L formula
+      depositSheet.getRange(depositRow, 11).setFormula(
+        `=MAX(SUM($J$${depositDataStart}:J${depositRow})-SUM($I$${depositDataStart}:I${depositRow}),0)`
+      );
+      depositSheet.getRange(depositRow, 12).setFormula(
+        `=MAX(SUM($I$${depositDataStart}:I${depositRow})-SUM($J$${depositDataStart}:J${depositRow}),0)`
+      );
       addTotalsRow(depositSheet, depositSheetName, payload.address || '', payload.mobile || '');
 
       return jsonResponse({ ok: true, message: 'Deposit added', sheetName: depositSheetName });

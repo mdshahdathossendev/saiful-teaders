@@ -1061,7 +1061,124 @@
   box-shadow: none;
 }
 
-/* ── Sales Form Panel ─────────────────────────────────────────── */
+/* ── Previous Due Button ──────────────────────────────────────── */
+.previous-due-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.52rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(180, 83, 9, 0.25);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.previous-due-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(180, 83, 9, 0.35);
+}
+
+.previous-due-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── Previous Due Confirm Button ─────────────────────────────── */
+.previous-due-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.72rem 1.4rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 16px rgba(180, 83, 9, 0.25);
+}
+
+.previous-due-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(180, 83, 9, 0.35);
+}
+
+.previous-due-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
+/* ── Autocomplete ─────────────────────────────────────────────── */
+.autocomplete-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-wrap input {
+  width: 100%;
+}
+
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  margin: 0;
+  padding: 0.3rem 0;
+  list-style: none;
+  background: #ffffff;
+  border: 1.5px solid rgba(107, 79, 42, 0.22);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  animation: acDropIn 0.15s ease;
+}
+
+@keyframes acDropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #1f2937;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  user-select: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background: linear-gradient(135deg, rgba(107, 79, 42, 0.08), rgba(202, 166, 109, 0.08));
+  color: #4a3115;
+}
+
+.ac-icon {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.ac-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .single-form-panel {
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--border);
