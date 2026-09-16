@@ -225,7 +225,7 @@ export function useDashboard() {
       if (feetMode === 'tons' && ['tons', 'feetPerTon'].includes(fieldName)) {
         const t  = Number(toEnglishNumber(next.tons))      || 0;
         const fp = Number(toEnglishNumber(next.feetPerTon)) || 0;
-        if (t > 0 && fp > 0) next.feet = fmtCalc(t * fp);
+        if (t > 0 && fp > 0) next.feet = roundMeasurement(t * fp);
       }
 
       const recalcAmount =
@@ -276,7 +276,7 @@ export function useDashboard() {
       } else {
         const t  = Number(toEnglishNumber(next.tons))      || 0;
         const fp = Number(toEnglishNumber(next.feetPerTon)) || 0;
-        if (t > 0 && fp > 0) next.feet = fmtCalc(t * fp);
+        if (t > 0 && fp > 0) next.feet = roundMeasurement(t * fp);
       }
       const feet  = Number(toEnglishNumber(next.feet)) || 0;
       const rate  = Number(toEnglishNumber(next.rate)) || 0;
@@ -445,7 +445,7 @@ export function useDashboard() {
     const feetPerTon = Number(toEnglishNumber(form.feetPerTon)) || 0;
     let feet = 0;
     if (length > 0 && width > 0 && height > 0) { feet = Math.round(length * width * height); }
-    else if (tons > 0 && feetPerTon > 0)         { feet = tons * feetPerTon; }
+    else if (tons > 0 && feetPerTon > 0)         { feet = Math.round(tons * feetPerTon); }
 
     const rate     = Number(toEnglishNumber(form.rate))          || 0;
     const amount   = feet * rate;
