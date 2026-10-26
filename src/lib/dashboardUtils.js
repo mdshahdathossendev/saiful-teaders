@@ -1,12 +1,12 @@
 // ─── Pure utility functions for the dashboard ───────────────────────────────
 
+import { GOOGLE_SHEET_WEB_APP_URL } from '@/lib/googleSheetConfig';
+
 export const DEFAULT_USERNAME = '01711662074';
 export const DEFAULT_PASSWORD = '662074';
 export const DEFAULT_INITIAL_CHALLAN = 5000;
 
-export const GOOGLE_SHEET_WEB_APP_URL =
-  process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL ||
-  'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
+export { GOOGLE_SHEET_WEB_APP_URL };
 
 /** দশমিক হলে ২ ঘর, নইলে পূর্ণসংখ্যা */
 export const fmtCalc = (n) => {

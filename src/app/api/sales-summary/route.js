@@ -1,20 +1,14 @@
 import { NextResponse } from 'next/server';
-
-const DEFAULT_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbxzDZw5dBghxj0YWWWwgOaW5fdpoZ1gn_TjqZMxBUatahTySkV5dzIr5I8Js8qon2Mh6g/exec';
-
-function getSheetUrl() {
-  const envUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEET_WEB_APP_URL;
-  return envUrl && !envUrl.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')
-    ? envUrl
-    : DEFAULT_WEB_APP_URL;
-}
+import { getGoogleSheetWebAppUrl } from '@/lib/googleSheetConfig';
 
 export async function GET() {
-  const sheetUrl = getSheetUrl();
+  const sheetUrl = getGoogleSheetWebAppUrl();
 
   if (!sheetUrl) {
-    return NextResponse.json({ totalCustomers: 0, totalAmount: 0, currentMonthTotal: 0 });
+    return NextResponse.json(
+      { ok: false, error: 'A valid Google Apps Script URL must be set in .env.' },
+      { status: 500 }
+    );
   }
 
   try {

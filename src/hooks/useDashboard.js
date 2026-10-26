@@ -310,10 +310,8 @@ export function useDashboard() {
 
   const handleOpenSelectedSheet = () => {
     if (!form.customer) return;
-    const base = process.env.NEXT_PUBLIC_GOOGLE_SHEET_OPEN_URL || GOOGLE_SHEET_WEB_APP_URL;
-    if (!base || base.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')) {
-      setStatus('শিট খুলতে Google Sheet Open URL সেট করতে হবে।'); setError(''); return;
-    }
+    const base = GOOGLE_SHEET_WEB_APP_URL;
+    if (!base) { setStatus('Google Sheet Web App URL কনফিগার করুন।'); setError(''); return; }
     if (base.includes('docs.google.com/spreadsheets')) {
       const u = new URL(base);
       window.open(u.hash.includes('gid=') ? u.toString() : `${u.origin}${u.pathname}${u.search}`, '_blank', 'noopener,noreferrer');
@@ -434,7 +432,7 @@ export function useDashboard() {
     e.preventDefault();
     const customer = form.customer.trim();
     if (!customer) { setError('গ্রাহকের নাম নির্বাচন করুন।'); setStatus(''); return; }
-    if (GOOGLE_SHEET_WEB_APP_URL === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+    if (!GOOGLE_SHEET_WEB_APP_URL) {
       setError('Google Sheet Web App URL কনফিগার করুন।'); setStatus(''); return;
     }
 

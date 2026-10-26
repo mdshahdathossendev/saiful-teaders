@@ -1,21 +1,18 @@
 const SPREADSHEET_ID = '17iutMCNZLbWFj4SVTkFje8z9oxlR67KQPCXU45lH0LQ';
 
 // গ্রাহকের নাম টপ রো-তে (row 1) থাকবে — data column-এ থাকবে না
-// দৈর্ঘ্য/প্রস্থ/উচ্চতা শিটে যাবে না — শুধু ফুট যাবে
+// গাড়ির পরিমাপ, গুণ ও চালান নম্বর শিটে সংরক্ষণ হবে না
 const HEADERS = [
   'তারিখ',                   // A=1
   'গাড়ি',                    // B=2
-  'গাড়ির পরিমাপ (CFT)',      // C=3
-  'বিবরণ',                   // D=4
-  'টন',                      // E=5
-  'গুণ',                     // F=6
-  'ফুট',                     // G=7
-  'দর',                      // H=8
-  'টাকা',                    // I=9
-  'জমা',                     // J=10
-  'অবশিষ্ট',                 // K=11
-  'পাওনা',                   // L=12
-  'চালান নং',                // M=13
+  'বিবরণ',                   // C=3
+  'টন',                      // D=4
+  'ফুট',                     // E=5
+  'দর',                      // F=6
+  'টাকা',                    // G=7
+  'জমা',                     // H=8
+  'অবশিষ্ট',                 // I=9
+  'পাওনা',                   // J=10
 ];
 
 function normalizeText(value) {
@@ -54,21 +51,56 @@ function getHeaderRowIndex(sheet) {
   return 3;
 }
 
+function migrateRemovedColumns(sheet) {
+  const headerRow = getHeaderRowIndex(sheet);
+  const lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return;
+
+  const headers = sheet.getRange(headerRow, 1, 1, lastColumn).getDisplayValues()[0];
+  const removedHeaders = new Set([
+    normalizeText('গাড়ির পরিমাপ (CFT)'),
+    normalizeText('গুণ'),
+    normalizeText('চালান নং'),
+  ]);
+  const columnsToRemove = [];
+  headers.forEach((header, index) => {
+    if (removedHeaders.has(normalizeText(header))) columnsToRemove.push(index + 1);
+  });
+  if (columnsToRemove.length === 0) return;
+
+  const challanColumn = headers.findIndex((header) =>
+    normalizeText(header) === normalizeText('চালান নং')
+  );
+  if (challanColumn !== -1) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow > headerRow) {
+      const challans = sheet.getRange(headerRow + 1, challanColumn + 1, lastRow - headerRow, 1).getValues();
+      let maxChallan = 4999;
+      challans.forEach((row) => {
+        const value = parseInt(row[0], 10);
+        if (!isNaN(value) && value > maxChallan) maxChallan = value;
+      });
+      const properties = PropertiesService.getScriptProperties();
+      const nextChallan = parseInt(properties.getProperty('NextChallanNo'), 10);
+      if (isNaN(nextChallan) || nextChallan <= maxChallan) {
+        properties.setProperty('NextChallanNo', String(maxChallan + 1));
+      }
+    }
+  }
+
+  if (headerRow > 1) sheet.getRange(1, 1, 2, lastColumn).breakApart();
+  columnsToRemove.sort((a, b) => b - a).forEach((column) => sheet.deleteColumn(column));
+  sheet.getRange(headerRow, 1, 1, HEADERS.length).setValues([HEADERS]);
+  if (headerRow > 1) {
+    sheet.getRange(1, 1, 1, HEADERS.length).merge();
+    sheet.getRange(2, 1, 1, HEADERS.length).merge();
+  }
+}
+
 /**
- * applyCalculatedRow — নতুন 13-column layout:
- *   A=1  তারিখ
- *   B=2  গাড়ি
- *   C=3  গাড়ির পরিমাপ (ফুট)  — measurement mode-এ ফুট আসে, নইলে 0
- *   D=4  বিবরণ
- *   E=5  টন
- *   F=6  গুণ
- *   G=7  ফুট       = C যদি C>0, নাহলে E×F
- *   H=8  দর
- *   I=9  টাকা      = G×H
- *   J=10 জমা
- *   K=11 অবশিষ্ট   = MAX(cumulative জমা − cumulative টাকা, 0)
- *   L=12 পাওনা     = MAX(cumulative টাকা − cumulative জমা, 0)
- *   M=13 চালান নং
+ * applyCalculatedRow — 10-column layout:
+ *   A=1 তারিখ, B=2 গাড়ি, C=3 বিবরণ, D=4 টন, E=5 ফুট,
+ *   F=6 দর, G=7 টাকা, H=8 জমা, I=9 অবশিষ্ট, J=10 পাওনা
  */
 function applyCalculatedRow(sheet, row) {
   // এই ফাংশন এখন কিছু করে না — সব data সরাসরি value হিসেবে যায়
@@ -315,6 +347,7 @@ function jsonResponse(data) {
 }
 
 function ensureCustomerTitleHeader(sheet, customerName, address, mobile) {
+  migrateRemovedColumns(sheet);
   const firstCell = String(sheet.getRange(1, 1).getValue() || '').trim();
   const insertedNew = firstCell === 'তারিখ';
 
@@ -367,7 +400,7 @@ function styleSheet(sheet, customerName, address, mobile) {
   ensureCustomerTitleHeader(sheet, customerName, address, mobile);
 
   const headerRow = 3;
-  const lastColumn = HEADERS.length; // 13
+  const lastColumn = HEADERS.length;
   const lastRow = Math.max(sheet.getLastRow(), headerRow);
 
   sheet.setFrozenRows(headerRow);
@@ -385,10 +418,10 @@ function styleSheet(sheet, customerName, address, mobile) {
   sheet.getRange(headerRow, 1).setBackground('#0f766e');
   // গাড়ি (B=2) — বাদামি
   sheet.getRange(headerRow, 2).setBackground('#b45309');
-  // টন-ফুট (E=5 থেকে H=8) — নীল
-  sheet.getRange(headerRow, 5, 1, 4).setBackground('#2563eb');
-  // টাকা-পাওনা (I=9 থেকে L=12) — বেগুনি
-  sheet.getRange(headerRow, 9, 1, 4).setBackground('#7c3aed');
+  // টন থেকে দর (D=4 থেকে F=6) — নীল
+  sheet.getRange(headerRow, 4, 1, 3).setBackground('#2563eb');
+  // টাকা-পাওনা (G=7 থেকে J=10) — বেগুনি
+  sheet.getRange(headerRow, 7, 1, 4).setBackground('#7c3aed');
   sheet.setRowHeight(headerRow, 34);
 
   if (!sheet.getFilter()) {
@@ -407,19 +440,14 @@ function styleSheet(sheet, customerName, address, mobile) {
     // তারিখ (A=1)
     sheet.getRange(headerRow + 1, 1, lastRow - headerRow, 1).setNumberFormat('yyyy-mm-dd');
 
-    // গাড়ির পরিমাপ (C=3) — decimal
-    sheet.getRange(headerRow + 1, 3, lastRow - headerRow, 1)
+    // টন থেকে পাওনা (D=4 থেকে J=10)
+    sheet.getRange(headerRow + 1, 4, lastRow - headerRow, 7)
       .setNumberFormat('#,##0.##')
       .setHorizontalAlignment('center');
 
-    // টন থেকে পাওনা (E=5 থেকে L=12)
-    sheet.getRange(headerRow + 1, 5, lastRow - headerRow, 8)
-      .setNumberFormat('#,##0.##')
-      .setHorizontalAlignment('center');
-
-    // বিবরণ (D=4) ও গাড়ি (B=2) — left align
+    // বিবরণ (C=3) ও গাড়ি (B=2) — left align
     sheet.getRange(headerRow + 1, 2, lastRow - headerRow, 1).setHorizontalAlignment('left');
-    sheet.getRange(headerRow + 1, 4, lastRow - headerRow, 1).setHorizontalAlignment('left');
+    sheet.getRange(headerRow + 1, 3, lastRow - headerRow, 1).setHorizontalAlignment('left');
 
     for (let row = headerRow + 1; row <= lastRow; row += 1) {
       if (row % 2 === 0) {
@@ -428,15 +456,14 @@ function styleSheet(sheet, customerName, address, mobile) {
     }
   }
 
-  // Column widths — 13-column layout
-  // A=তারিখ, B=গাড়ি, C=গাড়ির পরিমাপ, D=বিবরণ, E=টন, F=গুণ,
-  // G=ফুট, H=দর, I=টাকা, J=জমা, K=অবশিষ্ট, L=পাওনা, M=চালান নং
-  const widths = [100, 120, 110, 180, 80, 80, 80, 90, 110, 110, 110, 110, 110];
+  // Column widths — 10-column layout
+  const widths = [100, 120, 180, 80, 80, 90, 110, 110, 110, 110];
   widths.forEach((width, index) => sheet.setColumnWidth(index + 1, width));
   sheet.getRange(1, 1, lastRow, lastColumn).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 }
 
 function removeTotalsRow(sheet) {
+  migrateRemovedColumns(sheet);
   const lastRow = sheet.getLastRow();
   const headerRow = getHeaderRowIndex(sheet);
   if (lastRow <= headerRow) return;
@@ -455,17 +482,17 @@ function addTotalsRow(sheet, customerName, address, mobile) {
   const dataStartRow = headerRow + 1;
   const totalRow = sheet.getLastRow() + 1;
 
-  // 13 column
+  // 10 column
   sheet.getRange(totalRow, 1, 1, HEADERS.length).setValues([[
-    'মোট', '', '', '', '', '', '', '', '', '', '', '', '',
+    'মোট', '', '', '', '', '', '', '', '', '',
   ]]);
 
-  // I=9 টাকা, J=10 জমা, K=11 অবশিষ্ট, L=12 পাওনা
-  sheet.getRange(totalRow, 9, 1, 4).setFormulas([[
-    `=SUM(I${dataStartRow}:I${totalRow - 1})`,
-    `=SUM(J${dataStartRow}:J${totalRow - 1})`,
-    `=MAX(J${totalRow}-I${totalRow},0)`,
-    `=MAX(I${totalRow}-J${totalRow},0)`,
+  // G=7 টাকা, H=8 জমা, I=9 অবশিষ্ট, J=10 পাওনা
+  sheet.getRange(totalRow, 7, 1, 4).setFormulas([[
+    `=SUM(G${dataStartRow}:G${totalRow - 1})`,
+    `=SUM(H${dataStartRow}:H${totalRow - 1})`,
+    `=MAX(H${totalRow}-G${totalRow},0)`,
+    `=MAX(G${totalRow}-H${totalRow},0)`,
   ]]);
 
   styleSheet(sheet, customerName, address, mobile);
@@ -475,7 +502,7 @@ function addTotalsRow(sheet, customerName, address, mobile) {
     .setBackground('#fff2cc')
     .setHorizontalAlignment('center')
     .setBorder(true, true, true, true, true, true, '#d6b656', SpreadsheetApp.BorderStyle.SOLID);
-  sheet.getRange(totalRow, 9, 1, 4)
+  sheet.getRange(totalRow, 7, 1, 4)
     .setNumberFormat('৳ #,##0.##')
     .setFontSize(12)
     .setFontWeight('bold')
@@ -495,6 +522,7 @@ function doGet(e) {
 
     spreadsheet.getSheets().forEach((sheet) => {
       if (sheet.getName() === 'Customers') return;
+      migrateRemovedColumns(sheet);
       const headerRow = getHeaderRowIndex(sheet);
       const lastRow = sheet.getLastRow();
       if (lastRow <= headerRow) return;
@@ -508,8 +536,8 @@ function doGet(e) {
       values.forEach(function(row) {
         const label = String(row[0] || '').trim();
         if (label === 'মোট') return;
-        const amt = Number(row[8]) || 0; // I=idx8=টাকা
-        const dep = Number(row[9]) || 0; // J=idx9=জমা
+        const amt = Number(row[6]) || 0; // G=idx6=টাকা
+        const dep = Number(row[7]) || 0; // H=idx7=জমা
         sheetAmount    += amt;
         sheetDeposited += dep;
         if (amt > 0 || dep > 0) hasData = true;
@@ -530,12 +558,13 @@ function doGet(e) {
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
 
+    migrateRemovedColumns(sheet);
     const headerRow = getHeaderRowIndex(sheet);
     const lastRow = sheet.getLastRow();
     if (lastRow <= headerRow) return jsonResponse({ ok: true, deposited: 0, remaining: 0, due: 0 });
 
     // মোট রো-র formula result সরাসরি না নিয়ে data rows থেকে সরাসরি SUM করি
-    // I=col9(idx8)=টাকা, J=col10(idx9)=জমা
+    // G=col7(idx6)=টাকা, H=col8(idx7)=জমা
     const dataRange = sheet.getRange(headerRow + 1, 1, lastRow - headerRow, HEADERS.length);
     const values = dataRange.getValues();
 
@@ -545,8 +574,8 @@ function doGet(e) {
     values.forEach(function(row) {
       const label = String(row[0] || '').trim();
       if (label === 'মোট') return; // totals row বাদ
-      totalAmount    += (Number(row[8])  || 0); // I=idx8
-      totalDeposited += (Number(row[9])  || 0); // J=idx9
+      totalAmount    += (Number(row[6])  || 0); // G=idx6
+      totalDeposited += (Number(row[7])  || 0); // H=idx7
     });
 
     const remaining = Math.max(totalDeposited - totalAmount, 0);
@@ -606,8 +635,10 @@ function doGet(e) {
         const headerRow = getHeaderRowIndex(sheet);
         if (lastRow <= headerRow) return;
         try {
-          // চালান নং এখন M=col13
-          const challanCol = sheet.getRange(headerRow + 1, 13, lastRow - headerRow, 1).getValues();
+          const headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+          const challanIndex = findHeaderIndex(headers, ['চালান নং']);
+          if (challanIndex < 0) return;
+          const challanCol = sheet.getRange(headerRow + 1, challanIndex + 1, lastRow - headerRow, 1).getValues();
           challanCol.forEach(row => {
             const val = parseInt(row[0], 10);
             if (!isNaN(val) && val > max) max = val;
@@ -727,17 +758,14 @@ function doPost(e) {
       pdSheet.appendRow([
         payload.date || '',   // A তারিখ
         '',                   // B গাড়ি
-        '',                   // C গাড়ির পরিমাপ
-        'আগের পাওয়ানা',      // D বিবরণ
-        '',                   // E টন
-        '',                   // F গুণ
-        '',                   // G ফুট
-        '',                   // H দর
-        dueAmount,            // I টাকা — সরাসরি পাওনার পরিমাণ
-        0,                    // J জমা
-        0,                    // K অবশিষ্ট
-        0,                    // L পাওনা
-        '',                   // M চালান নং
+        'আগের পাওয়ানা',      // C বিবরণ
+        '',                   // D টন
+        '',                   // E ফুট
+        '',                   // F দর
+        dueAmount,            // G টাকা — সরাসরি পাওনার পরিমাণ
+        0,                    // H জমা
+        0,                    // I অবশিষ্ট
+        0,                    // J পাওনা
       ]);
 
       addTotalsRow(pdSheet, pdSheetName, payload.address || '', payload.mobile || '');
@@ -756,24 +784,21 @@ function doPost(e) {
       removeTotalsRow(depositSheet);
       depositSheet.getRange(3, 1, 1, HEADERS.length).setValues([HEADERS]);
 
-      // 13 column — deposit row
+      // 10 column — deposit row
       depositSheet.appendRow([
         payload.date || '',          // A তারিখ
         '',                          // B গাড়ি
-        '',                          // C গাড়ির পরিমাপ (ফুট)
-        'জমা',                       // D বিবরণ
-        '',                          // E টন
-        '',                          // F গুণ
-        '',                          // G ফুট
-        '',                          // H দর
-        0,                           // I টাকা
-        Number(payload.deposited || 0), // J জমা
-        0,                           // K অবশিষ্ট
-        0,                           // L পাওনা
-        '',                          // M চালান নং
+        'জমা',                       // C বিবরণ
+        '',                          // D টন
+        '',                          // E ফুট
+        '',                          // F দর
+        0,                           // G টাকা
+        Number(payload.deposited || 0), // H জমা
+        0,                           // I অবশিষ্ট
+        0,                           // J পাওনা
       ]);
 
-      // K ও L plain value — মোট রো addTotalsRow এ ঠিক হবে
+      // মোট রো addTotalsRow এ recalculated হবে
       addTotalsRow(depositSheet, depositSheetName, payload.address || '', payload.mobile || '');
 
       return jsonResponse({ ok: true, message: 'Deposit added', sheetName: depositSheetName });
@@ -796,24 +821,17 @@ function doPost(e) {
     if (isNaN(challanNo) || challanNo < currentNext) challanNo = currentNext;
     props.setProperty('NextChallanNo', String(challanNo + 1));
 
-    // 13 column — দৈর্ঘ্য/প্রস্থ/উচ্চতা পাঠানো হবে না
-    // vehicleMeasurementFeet = measurement mode-এ ফুট, নইলে 0
-    const vehicleFeet = payload.vehicleMeasurementFeet != null ? Number(payload.vehicleMeasurementFeet) : 0;
-
     sheet.appendRow([
       payload.date || '',              // A তারিখ
       payload.vehicle || '',           // B গাড়ি
-      vehicleFeet,                     // C গাড়ির পরিমাপ (ফুট)
-      payload.description || '',       // D বিবরণ
-      Number(payload.tons || 0),       // E টন
-      Number(payload.feetPerTon || 0), // F গুণ
-      Number(payload.feet || 0),       // G ফুট
-      Number(payload.rate || 0),       // H দর
-      Number(payload.amount || 0),     // I টাকা
-      Number(payload.deposited || 0),  // J জমা
-      Number(payload.remaining || 0),  // K অবশিষ্ট
-      Number(payload.due || 0),        // L পাওনা
-      challanNo,                       // M চালান নং
+      payload.description || '',       // C বিবরণ
+      Number(payload.tons || 0),       // D টন
+      Number(payload.feet || 0),       // E ফুট
+      Number(payload.rate || 0),       // F দর
+      Number(payload.amount || 0),     // G টাকা
+      Number(payload.deposited || 0),  // H জমা
+      Number(payload.remaining || 0),  // I অবশিষ্ট
+      Number(payload.due || 0),        // J পাওনা
     ]);
     applyCalculatedRow(sheet, sheet.getLastRow());
     addTotalsRow(sheet, sheetName, payload.address || '', payload.mobile || '');
